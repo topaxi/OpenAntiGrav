@@ -312,9 +312,10 @@ pub(super) fn menu_page(
     // The same list the live menus offer, this machine's own `shaders/`
     // directory included - a still of the GRAPHICS page should show the row a
     // player would actually see.
+    let screen_filters = crate::screen::Catalogue::load(crate::screen::Catalogue::directory());
     model.supply(
         oag_ui::menu::ValueSource::ScreenFilters,
-        &crate::screen::Catalogue::load(crate::screen::Catalogue::directory()).choices(),
+        &screen_filters.choices(),
     );
     // Straight off the boot survey, not off the settings file, and that is
     // the difference from the two rows above: what a player may choose here
@@ -351,6 +352,7 @@ pub(super) fn menu_page(
         model.seed(key, &value);
     }
     crate::settings::supply_reset(&mut model, title, platform, strings);
+    crate::screen::offer_strength_row(&mut model, &screen_filters);
     // The AI PILOTS page's own three sources. Read off the player's real
     // pilot directory rather than invented, for the reason the circuits above
     // are read off the disc: a `PILOT` row showing nothing and one showing

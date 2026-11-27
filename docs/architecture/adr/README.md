@@ -63,7 +63,7 @@ out to be wrong.
 | [0050](0050-format-crates-split-by-format-family.md) | Format crates split by format family, and why that is not the console axis | Accepted; extends ADR-0022 |
 | [0051](0051-the-composition-root-splits-below-itself.md) | The composition root splits below itself, and the build-time argument does not survive a second time | Accepted; extends ADR-0050 |
 | [0052](0052-world-and-race-tick-widen-to-n-players.md) | `World` and `Race::tick` widen to N players ahead of split screen, multi-window or network play | Accepted; extends ADR-0003 |
-| [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041 |
+| [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041; its one-strength-for-every-preset item superseded by [ADR-0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md) |
 | [0054](0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) | A touch front end is a second axis on `FrontEnd`, not a `MenuSkin` variant | Accepted; extends ADR-0022 |
 | [0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) | Replays are inputs and hashes, and a ghost is drawn from poses | Accepted; opens M7, creates `oag-replay`; its full-race viewer paragraph, whole-race pose track and "recording is optional" superseded by [ADR-0087](0087-a-replay-and-photo-mode-share-one-timeline.md) |
 | [0056](0056-a-render-side-port-of-the-particle-generator.md) | A render-side port of the original's particle generator | Accepted; `oag_fx::ranrot`, render-only |
@@ -105,6 +105,7 @@ out to be wrong.
 | [0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md) | A campaign run offers a choice between races and shows the mod's stats | **Proposed** (2026-11-20); split out of ADR-0093; editable until merged to `main`; nothing built |
 | [0095](0095-every-file-under-the-profile-folder-is-written-atomically.md) | Every file under the profile folder is written atomically | **Accepted** (2026-11-20); one temp-file-and-rename helper (`profile::write`), flushed, web one `setItem` |
 | [0096](0096-dynamic-resolution-probes-a-rise-a-falling-clock-hides.md) | Dynamic resolution probes a rise a falling clock hides | **Accepted** (2026-11-26); a second way to rise beside ADR-0042's loop, kept only when the clock paid for the step |
+| [0097](0097-a-screen-filter-that-moves-pixels-runs-at-full-strength.md) | A screen filter that moves pixels runs at full strength | **Accepted** (2026-11-27); supersedes ADR-0053's strength item |
 
 ## Format
 

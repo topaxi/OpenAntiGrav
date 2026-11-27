@@ -31,6 +31,7 @@
 //! ```text
 //! //! name = "PSP-3000 LCD"
 //! //! description = "One sentence for the menu, optional."
+//! //! fixed_strength = true  # optional, for a preset that moves pixels
 //! //!
 //! //! [[param]]
 //! //! name = "persistence"
@@ -43,6 +44,11 @@
 //! Each `[[param]]` becomes `fn param_<name>() -> f32` in the compiled module,
 //! in declaration order, up to [`MAX_PARAMS`]. `min`, `max` and `step` are for
 //! a future tuning row and are checked, not yet drawn.
+//!
+//! `fixed_strength = true` is for a preset that moves pixels (a barrel): a
+//! strength mix would show the moved and the unmoved frame on top of each
+//! other, so the pass always draws at full strength and the menu offers no
+//! strength row. See [`Preset::fixed_strength`].
 //!
 //! # A shader that will not build is a message, not a crash
 //!
@@ -96,6 +102,8 @@ struct Header {
     #[serde(default)]
     description: String,
     #[serde(default)]
+    fixed_strength: bool,
+    #[serde(default)]
     param: Vec<Param>,
 }
 
@@ -107,6 +115,9 @@ pub struct Preset {
     /// What the menu row shows. The header's `name`, or the id when it has none.
     pub name: String,
     pub description: String,
+    /// The player's strength row does not apply: [`Screen`] draws this preset
+    /// at full strength whatever it is handed.
+    pub fixed_strength: bool,
     pub params: Vec<Param>,
     /// The file after its header - the WGSL that defines `screen_filter`.
     pub body: String,
@@ -162,6 +173,7 @@ impl Preset {
             id: id.to_string(),
             name: header.name.unwrap_or_else(|| id.to_string()),
             description: header.description,
+            fixed_strength: header.fixed_strength,
             params: header.param,
             body: body.to_string(),
             revision: 0,
@@ -238,7 +250,8 @@ pub struct Frame<'a> {
     pub native: (f32, f32),
     /// Seconds since the filter was built.
     pub time: f32,
-    /// The player's strength row, `0..=1`.
+    /// The player's strength row, `0..=1`. Ignored by a preset that is
+    /// [`Preset::fixed_strength`].
     pub strength: f32,
     /// The tunables. [`Preset::defaults`] unless something overrides them.
     pub params: [[f32; 4]; 4],
@@ -265,6 +278,8 @@ pub struct Screen {
     frames: u32,
     format: wgpu::TextureFormat,
     size: (u32, u32),
+    /// [`Preset::fixed_strength`], of the preset this was compiled from.
+    fixed_strength: bool,
 }
 
 #[derive(Debug)]
@@ -382,6 +397,7 @@ impl Screen {
             frames: 0,
             format: target_format,
             size: (0, 0),
+            fixed_strength: preset.fixed_strength,
         })
     }
 
@@ -420,7 +436,11 @@ impl Screen {
             native_size: [frame.native.0.max(1.0), frame.native.1.max(1.0)],
             frame: self.frames as f32,
             time: frame.time,
-            strength: frame.strength.clamp(0.0, 1.0),
+            strength: if self.fixed_strength {
+                1.0
+            } else {
+                frame.strength.clamp(0.0, 1.0)
+            },
             padding: [0.0; 3],
             params: frame.params,
         };
