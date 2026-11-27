@@ -342,5 +342,13 @@ mod tests {
                 .contains("let frame = style.frame(&frame);"),
             "the runtime draws the frame in the style the screens were read in"
         );
+        let still = include_str!("../../../capture/endrace_page.rs");
+        for needed in ["ScreenStyle::new(", "style.frame(frame)"] {
+            assert!(still.contains(needed), "--menu-page: {needed}");
+        }
+        assert!(
+            include_str!("../../../capture.rs").contains("style_of(&options.settings)"),
+            "--menu-page takes the saved style"
+        );
     }
 }
