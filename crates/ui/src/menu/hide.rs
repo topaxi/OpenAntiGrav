@@ -45,6 +45,7 @@ impl Menu {
             if back.is_empty() {
                 continue;
             }
+            let was = self.cursor[index];
             for row in back {
                 let at = row.at.min(page.entries.len());
                 page.entries.insert(at, row.entry);
@@ -54,7 +55,16 @@ impl Menu {
                     self.cursor[index] += 1;
                 }
             }
+            self.carry_pointed(index, was);
             self.refocus(index);
+        }
+    }
+
+    /// A pointer's mark on the cursor's row follows it when rows above come or
+    /// go, so the window does not start asking for the pad's lookahead.
+    fn carry_pointed(&mut self, page: usize, was: usize) {
+        if self.pointed[page] == Some(was) {
+            self.pointed[page] = Some(self.cursor[page]);
         }
     }
 
@@ -94,6 +104,7 @@ impl Menu {
     fn hide_where(&mut self, matches: impl Fn(&Entry) -> bool) {
         for index in 0..self.definition.pages.len() {
             let mut moved = false;
+            let was = self.cursor[index];
             while let Some(row) = self.definition.pages[index]
                 .entries
                 .iter()
@@ -122,6 +133,7 @@ impl Menu {
                 moved = true;
             }
             if moved {
+                self.carry_pointed(index, was);
                 self.refocus(index);
             }
         }

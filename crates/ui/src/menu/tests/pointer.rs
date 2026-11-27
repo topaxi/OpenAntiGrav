@@ -539,6 +539,33 @@ fn a_pad_move_from_a_hovered_edge_row_scrolls_again() {
     assert_eq!(long.at(), (top - 1, top - 2), "the row before it too");
 }
 
+/// A row coming or going above a hovered edge row carries the pointer's claim
+/// with it: the window follows the row and asks for no lookahead of its own.
+#[test]
+fn rows_coming_and_going_keep_a_hovered_edge_row_on_its_edge() {
+    let mut long = Long::new(skin(), Frame::default());
+    long.menu.definition.pages[0].entries[0] = Entry::Run {
+        label: "QUIT".into(),
+        action: Action::Quit,
+        inputs: None,
+    };
+    long.menu.offer(Action::Quit, false);
+    let (bottom, at) = long.edge(true);
+    long.feed(&move_to(at));
+    long.menu.offer(Action::Quit, true);
+    assert_eq!(
+        long.at(),
+        (bottom + 1, 1),
+        "inserted above: the same row stays last on screen"
+    );
+
+    long.feed(&wheel(4));
+    let (top, at) = long.edge(false);
+    long.feed(&move_to(at));
+    long.menu.offer(Action::Quit, false);
+    assert_eq!(long.at(), (top - 1, top - 1), "removed above: stays first");
+}
+
 /// The page with the most rows, opened - one that does not fit on screen.
 fn long_page() -> (Menu, Vec<Region>, f32) {
     let mut menu = Menu::new(built_in());
