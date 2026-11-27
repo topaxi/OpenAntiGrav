@@ -67,4 +67,10 @@ pub(crate) struct RaceRunArgs {
     #[cfg(feature = "dev-cli")]
     #[arg(long, value_name = "WEAPON")]
     pub(crate) give: Option<String>,
+    /// With `--give`, hand the weapon over at tick 0 only instead of topping the
+    /// slot up whenever it is empty, so a screenshot after the press shows the
+    /// pickup spent. A `--screenshot` race capture only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, requires = "give")]
+    pub(crate) give_once: bool,
 }

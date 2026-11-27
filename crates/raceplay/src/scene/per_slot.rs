@@ -60,7 +60,10 @@ impl Build<'_> {
     /// One drawable per slot from the model `pick` takes out of that slot's
     /// livery, blended with `blend` and written into the glow mask;
     /// `None` for a slot with no model or an empty one. A grid wider than the
-    /// liveries repeats the last, as the hulls do.
+    /// liveries repeats the last, as the hulls do. A shield shell under its own
+    /// lit program (`Model::shield_lit`) takes neither: the original masks the
+    /// draw's alpha off and its program samples no shadow map
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The shell's draw state").
     pub(super) fn drawables(
         &self,
         pick: impl Fn(&oag_livery::Livery) -> Option<Model>,
@@ -74,6 +77,7 @@ impl Build<'_> {
                 let Some(model) = pick(livery).filter(|model| !model.indices.is_empty()) else {
                     return Ok(None);
                 };
+                let (glow, receiver) = mask_and_shadow(&model, receiver);
                 Drawable::new(
                     self.device,
                     self.queue,
@@ -84,7 +88,7 @@ impl Build<'_> {
                     self.sample_count,
                     depth,
                     blend,
-                    mesh_render::GlowMask::Written,
+                    glow,
                     self.zone_art,
                     self.shadow_maps,
                     receiver,
@@ -93,5 +97,44 @@ impl Build<'_> {
                 .map(Some)
             })
             .collect()
+    }
+}
+
+/// A per-slot model's glow mask and shadow receiver: written and `receiver`, except for a lit
+/// shield shell.
+fn mask_and_shadow(
+    model: &Model,
+    receiver: mesh_render::ShadowReceiver,
+) -> (mesh_render::GlowMask, mesh_render::ShadowReceiver) {
+    if model.shield_lit {
+        (
+            mesh_render::GlowMask::Protected,
+            mesh_render::ShadowReceiver::Never,
+        )
+    } else {
+        (mesh_render::GlowMask::Written, receiver)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_lit_shield_shell_leaves_the_glow_mask_and_takes_no_shadow() {
+        let mut model = crate::tests::model(0, 0);
+        let mapped = mesh_render::ShadowReceiver::Mapped;
+        assert_eq!(
+            mask_and_shadow(&model, mapped),
+            (mesh_render::GlowMask::Written, mapped)
+        );
+        model.shield_lit = true;
+        assert_eq!(
+            mask_and_shadow(&model, mapped),
+            (
+                mesh_render::GlowMask::Protected,
+                mesh_render::ShadowReceiver::Never
+            )
+        );
     }
 }

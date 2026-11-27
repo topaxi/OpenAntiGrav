@@ -113,11 +113,11 @@ fn blocks_are_aligned_and_do_not_overlap() {
     );
 }
 
-/// A view's four blocks go out as one write, and each reads back as the scene it was given.
-/// Write them with four `SceneBlocks::write` calls instead and the log holds four writes; leave
+/// A view's blocks go out as one write, and each reads back as the scene it was given.
+/// Write them with one `SceneBlocks::write` call each instead and the log holds five writes; leave
 /// a kind unused and its block is not written (two runs around it).
 #[test]
-fn a_views_four_blocks_are_one_write() {
+fn a_views_blocks_are_one_write() {
     use crate::drawable::{SceneBlocks, SceneKind};
     let Some((device, queue)) = test_gpu() else {
         return;
@@ -131,6 +131,7 @@ fn a_views_four_blocks_are_one_write() {
         scene_with(2.0),
         scene_with(3.0),
         scene_with(4.0),
+        scene_with(5.0),
     ];
     let block = SceneBlocks::view(3);
     let write = |used: &[SceneKind]| {
@@ -142,14 +143,14 @@ fn a_views_four_blocks_are_one_write() {
         blocks.write_view(
             &log,
             block,
-            [&scenes[0], &scenes[1], &scenes[2], &scenes[3]],
+            [&scenes[0], &scenes[1], &scenes[2], &scenes[3], &scenes[4]],
         );
         let writes = log.borrow().len();
         log.borrow_mut().replay(&queue);
         (blocks, writes)
     };
     let (blocks, writes) = write(&SceneBlocks::VIEW_KINDS);
-    assert_eq!(writes, 1, "four adjacent blocks, one write");
+    assert_eq!(writes, 1, "five adjacent blocks, one write");
     for (kind, scene) in SceneBlocks::VIEW_KINDS.into_iter().zip(&scenes) {
         let read = blocks.read(&device, &queue, 3, kind);
         assert_eq!(read.time, scene.time, "{kind:?}");
@@ -350,4 +351,90 @@ fn an_imposed_flame_clock_reaches_the_flame_surfaces_alone() {
         "the circuit keeps the world clock"
     );
     assert_ne!(flame.time, circuit.time);
+}
+
+/// A shell under its own lit program reads a block with the craft's light and fog, where the
+/// flame's has neither: on the flame's block the program's ambient and sun are zero and the
+/// shell draws black. The cockpit sphere, whose draw is unread, stays on the flame's.
+#[test]
+fn a_lit_shield_shell_reads_the_crafts_light_with_the_flames_clock() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shield_for_tests(&device);
+    scene.light_the_shield_for_tests();
+    scene.share_scene_blocks_for_tests(&device);
+    scene.enable_light_rig_for_tests();
+    scene.set_output_scale_for_tests(0.5);
+    assert_eq!(
+        scene.shield_scene_kinds_for_tests(),
+        [Some(SceneKind::Shield), Some(SceneKind::Flame)]
+    );
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    let shield = scene.scene_block(&device, &queue, 0, SceneKind::Shield);
+    let craft = scene.scene_block(&device, &queue, 0, SceneKind::Ship);
+    let flame = scene.scene_block(&device, &queue, 0, SceneKind::Flame);
+    assert_eq!(
+        bytemuck::bytes_of(&shield.light),
+        bytemuck::bytes_of(&craft.light),
+        "the craft's rig"
+    );
+    assert_eq!(shield.light.output_scale, 0.5);
+    assert_eq!(
+        bytemuck::bytes_of(&shield.fog),
+        bytemuck::bytes_of(&craft.fog),
+        "the craft's fog"
+    );
+    assert_eq!(shield.time, flame.time, "the flame's clock");
+}
+
+/// With no authored rig (a circuit without `.envsettings`, or an HD craft on a PSP circuit) the
+/// lit shell's block is the flame's, so the shader keeps its unlit path and no fog is added.
+#[test]
+fn a_lit_shield_shell_without_a_rig_reads_the_flames_block() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shield_for_tests(&device);
+    scene.light_the_shield_for_tests();
+    scene.share_scene_blocks_for_tests(&device);
+    let view = target(&device);
+    let race = race_with_a_grid();
+    scene.render_viewports(
+        &device,
+        &queue,
+        &view,
+        &race,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        Shadows::Off,
+        &[],
+        crate::scene::WindowEffects::default(),
+        &mut [],
+    );
+    assert_eq!(
+        bytemuck::bytes_of(&scene.scene_block(&device, &queue, 0, SceneKind::Shield)),
+        bytemuck::bytes_of(&scene.scene_block(&device, &queue, 0, SceneKind::Flame)),
+    );
 }

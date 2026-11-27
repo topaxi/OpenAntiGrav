@@ -822,6 +822,7 @@ pub(crate) fn race_launch(
                 },
                 gpu,
                 give: give_weapon(cli.give())?,
+                give_once: cli.give_once(),
                 autopilot: cli.driver.autopilot,
                 demo: cli.demo.mode().is_some(),
                 wallpaper: cli.demo.mode() == Some(true),

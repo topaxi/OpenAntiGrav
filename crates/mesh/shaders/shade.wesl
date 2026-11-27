@@ -1,6 +1,6 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
-import package::absorb::{absorb_shading, shield_shading};
+import package::absorb::{absorb_shading, shield_lit, shield_shading};
 import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, env_probe_tex, material_row, program_in, rate_from, rate_in, scene, sh_probe_table, shadow_sampler, sky_probe_tex, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
@@ -2001,11 +2001,27 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
         absorb = vec4<f32>(absorb_rgb * scene.light.output_scale, in.colour.a);
     }
     let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
-    let composed_lit = vec4<f32>(
+    var composed_lit = vec4<f32>(
         composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0)
             + shield_lightning,
         composed_plain.a,
     );
+    // **HD's shield shell, lit by its own program** (block #2 of `hexagonalshield_rich`, read
+    // off a live race draw): `ShieldColour * tex(u + A time, v) * (constantAmbientColour +
+    // directionalLight0Colour * sat(N.L))`, the world-space normal and light, then the fog lerp
+    // and `/2`. The texel is decoded on fetch (gamma nibble 7) and the colour is a linear
+    // constant, so nothing here is lit in gamma space.
+    // Where the frame holds no rig (a circuit with no `.envsettings`) the program's light would
+    // be zero, so the generic path above stands.
+    if shield_lit != 0.0 && scene.light.enabled > 0.5 {
+        let shell_light = scene.light.ambient
+            + scene.light.sun * clamp(dot(n, scene.light.direction), 0.0, 1.0);
+        composed_lit = vec4<f32>(
+            scene.light.output_scale * mix(texel.rgb, decode(texel.rgb), linear_out)
+                * in.colour.rgb * shell_light,
+            composed_lit.a,
+        );
+    }
     // **`enhanced` water** (`mesh::vex_water`, `water.wesl`) replaces the whole sum: the program
     // has its own light, glint and sky and no texture, so running the surface's generic path
     // and overwriting it would only shade it twice. The sky is the probe map's, encoded back to

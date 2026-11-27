@@ -46,7 +46,7 @@ mod pulse_ps2;
 mod pulse_psp;
 #[cfg(feature = "view")]
 pub(super) mod ripple;
-mod roster;
+pub(crate) mod roster;
 mod seams;
 pub(crate) mod sim;
 pub use sim::{SimLoad, load_sim};

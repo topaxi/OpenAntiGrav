@@ -76,6 +76,15 @@ fn race_on(image: &Path) -> race::Loaded {
     loaded
 }
 
+/// The disc ships `HUD_damage_indicator.xml` twice and only `DATA06`'s copy
+/// authors `DamageBarShieldBg`; archive order alone reads the other one.
+fn the_shield_layout_is_the_copy_that_authors_the_countdown(layout: &oag_hud::Layout) {
+    assert!(
+        layout.sprite("DamageBarShieldBg").is_some(),
+        "the loaded HUD has no Shield countdown widget"
+    );
+}
+
 /// Every one of HD's weapon icon widgets is authored on its arcade layout,
 /// resolves into the HUD sheet, and carries a real (non-zero, non-degenerate)
 /// source rectangle - sized off `Weapon::ALL` rather than a literal count.
@@ -95,6 +104,7 @@ fn every_weapon_icon_resolves_to_a_real_sprite_with_non_zero_extent() {
         .layout
         .as_ref()
         .expect("HD's arcade layout parsed");
+    the_shield_layout_is_the_copy_that_authors_the_countdown(layout);
 
     let mut checked = 0;
     let hd_roster = Weapon::ALL

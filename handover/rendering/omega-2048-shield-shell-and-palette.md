@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [omega, 2048]
-updated: 2026-11-26
+updated: 2026-11-27
 summary: "Omega/2048 shell, colour and lattice animation wired; open: ambient and lit variants, Zone shell, 2048-content modes, brightness unjudged"
 size: M (65)
 difficulty: medium (60)
@@ -31,6 +31,8 @@ shell's scene clock, without which none of the shader terms ever moved.
    through an sRGB view decides whether Omega's term should be decoded (ours takes it raw).
 5. The cockpit sphere's blend on 2048 and Omega stays the chosen alpha-over.
 6. No original frame of a raised shield has judged brightness (wipeout_pc for Omega, Vita3K for 2048).
+7. Their shell materials carry the back-face cull bit (`0x3d`, magnetic `0x39`) and ours draws both faces;
+   HD's live draw culls (`ps3-hdfury-eu/shield.md`, "The shell's draw state"). Checked, applies, not wired.
 
 ## Next Steps
 

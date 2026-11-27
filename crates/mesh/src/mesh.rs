@@ -209,6 +209,11 @@ pub struct Model {
     /// (on an HD model the vertex colour is otherwise a light term the generic
     /// path ignores as a tint).
     pub shield_shell: bool,
+    /// Beside [`Self::shield_shell`]: the shell's own lit program,
+    /// `ShieldColour * texture * (ambient + sun * sat(N.L))` on the light's output scale, off
+    /// the scene block's rig instead of the stand-in light
+    /// (`oag_title::Looks::shield_shell_lit`). The caller hands it a block that carries one.
+    pub shield_lit: bool,
     /// Our own HD/Fury-style shield (`graphics.own_shield`): the model is drawn by
     /// `own_shield.wesl`, with the vertex colour carrying the shield's animated colour as
     /// `shield_shell`'s does. Set only on the models `oag_livery::own_shield` builds for it.
@@ -371,6 +376,7 @@ impl Model {
             flame: None,
             absorb_shell: false,
             shield_shell: false,
+            shield_lit: false,
             own_shield: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
@@ -1111,6 +1117,7 @@ fn build_class(
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        shield_lit: false,
         own_shield: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),

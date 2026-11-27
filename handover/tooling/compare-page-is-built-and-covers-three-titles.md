@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, hd, pure, 2048, omega]
-updated: 2026-11-18
+updated: 2026-11-27
 summary: "Compare page: Pulse PS2 pairs all 16 circuits; 2048 now 14 circuits (adopt pending); Pure, Omega partial; publishing unlocked"
 ---
 
@@ -14,6 +14,14 @@ and per-title recipes with their status: [`docs/tools/compare-page.md`](../../do
 Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, platform, original or engine) and the page footer carries ADR-0074's rights-holder statement, read from `legal.md` and checked against the ADR by `just check-docs` (`compare-page-credits` lane, 2026-10-20); `--publish` builds strictly and refuses an entry with no `platform`.
 
 ## Open
+
+- **Pulse PS2 pairs do not measure texture sharpness (`ps2-sharpness-check`, 2026-11-27): a decision for the maintainer.**
+  Ours is a 1280x720 true-`16:9` render; the original is a 512x512 frame with a `40/21` projection through PCSX2's 2x and
+  stretch. A compare-only route (a projection-aspect flag on `oag-game`, the pair re-render drawing 1024x1024, stretching
+  to 1820x1024 and resizing once, the HUD laid out apart from it) is not built. Projection alone took the 16 grid pairs'
+  summed mean grey from 222.31 to 126.71 in a scratch build. Play keeps its true `16:9` either way. Numbers and limits:
+  [texture-level-per-title.md](../../docs/rendering/texture-level-per-title.md#why-the-error-rose-when-the-law-went-in).
+  Also open: the grid states no longer load (PCSX2 version), so the grid pairs cannot be re-captured without re-walking.
 
 - **Omega WipEout 2048 mode pairs (`gallery-omega-2048`, 2026-11-12): eight of ten paired, adopt pending.** `scripts/wipeout-pc-omega-pair.py --game-mode 2048` (method and metrics in `docs/tools/compare-page.md`, Omega row). Open: Rockway Stadium (`arena`) and Unity Square (`square`) are unpaired only for want of the original's capture (ours loads and draws both since the vertex buffer is cut across the 256 MiB limit, `docs/rendering/vertex-buffers.md`), ours draws 2048's HUD and the original's laps since `omega-2048-hud-laps` (the pairs adopted before it still show HD's HUD: re-render them with `just compare-rerender-ours --only omega`; open in 2048 mode on Omega (`docs/formats/omega-status.md`, "2048 mode: HUD and laps"): A+ CLASS's lap count (unmeasured; B read once, 4), Time Trial and Speed Lap counts, the pickup icon UVs and Pilot Assist plate (`ART_2048` carries neither), ours' HUD labels sitting about 8 px right of the original's, and the executable's GAME MODE selector (the circuit directory stands in)), ours' class rung for C and A CLASS is assumed and its lap counts differ (original C 4, A on Sol 5; ours venom 3, flash and rapier 4, phantom 5), the four Zone circuits (Zone race type, a different pair kind; ours decodes `zone_3` to no triangles), and the Sebenco Climb twin boot's grab, which is just past GO (the board check does not catch a post-GO frame).
 
