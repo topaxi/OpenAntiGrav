@@ -189,10 +189,12 @@ The windows of section 3 act on whatever node slot 8 holds. `SPZone_Update` call
 `[3.83, 5.25)` from the release, then by lap. A Zone race has no lap count
 (`total == 0`), so after the first crossing it is `[6.017, 9.3)`.
 
-**Seen live in a Zone race:** two RPCS3 reads of the gantry node on Vineta K Zone
-(2026-11-16, `zone-pair-hd`) gave **6.628 s and 6.758 s** at lap clocks 40.868 and
-40.999 s. The two advance together, and both lie inside `[6.017, 9.3)`; an unwindowed
-node would read about 44 s there.
+**Consistent with a live Zone race:** two RPCS3 captures on Vineta K Zone (2026-11-16)
+recorded **6.628 s and 6.758 s** at lap clocks 40.868 and 40.999 s and scenery clocks
+294.464 and 294.595 s. All three advance by the same 0.131 s, so a node in that race
+runs in real time on neither the lap nor the scenery clock. The range itself is no
+evidence: `rpcs3_hd_field.gantry_seconds` returns only values inside the windows, and it
+identifies the node as the gantry's by that alone.
 
 Wired for HD (`oag_title::adverts::ModeGantry::race_windows`). Ours: the countdown frame
 is unchanged by it (pixel-identical), the release jumps the icon to its whole loop, and

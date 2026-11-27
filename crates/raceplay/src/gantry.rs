@@ -868,8 +868,9 @@ impl CardTimeline {
     /// capture pins one.
     ///
     /// **A capture's [`crate::Options::gantry_seconds`] pins the race manager's board** - the
-    /// timelines that carry a release window, which is the gantry's `GO` board - and no other
-    /// timeline, so an advert beside it keeps its own clock.
+    /// timelines that carry a release window: the gantry's `GO` board, and a title's mode board
+    /// where `ModeGantry::race_windows` - and no other timeline, so an advert beside it keeps its
+    /// own clock.
     pub(super) fn seconds(&self, race: &Race, anim_seconds: Option<f32>) -> f32 {
         anim_seconds
             .or(race

@@ -481,7 +481,7 @@ pub struct Options {
     /// is put at the same phase. Read off the original's RAM, never derived; `0.0` is every race.
     pub world_clock_offset: f32,
     /// The start gantry's animation time in seconds, imposed on the board for the frame. **A capture
-    /// aid**: the original's GO board loops over a window of its own node's time (`[3.83, 5.25)`
+    /// aid**: the original's start board loops over a window of its own node's time (`[3.83, 5.25)`
     /// s before the first line crossing, 86 ticks a loop) whose phase the race clock alone does not
     /// give, so a pair is only comparable when ours shows the phase the original's RAM held. Read
     /// off the gantry node's `+0xc0`, never derived; `None` is every race.
