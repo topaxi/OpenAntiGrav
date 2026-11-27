@@ -241,6 +241,7 @@ impl Race {
                     let medal = super::detonator_hud::medal(cannon.score, self.view.medal_targets);
                     super::detonator_hud::readout(cannon, stage, emp, medal, &hud.chain)
                 }),
+            score_popups: self.score_popups(slot),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed

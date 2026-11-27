@@ -9,6 +9,7 @@ rust-version.workspace = true
 autotests = false
 
 [dependencies]
+oag-core.workspace = true
 oag-display.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true

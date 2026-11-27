@@ -71,6 +71,7 @@ pub mod race_line;
 pub mod radar;
 mod runtime;
 mod score_over;
+pub mod score_popup;
 pub mod score_rows;
 pub mod screen_layout;
 mod shield_bar;
@@ -98,6 +99,7 @@ pub use pickup::{IconFrame, mod_icon_size, pickup_icon_name};
 pub use placement::{Placement, place};
 pub use player_tags::PlayerTag;
 pub use race_line::RaceLine;
+pub use score_popup::{SCORE_POPUPS, ScoreFeedback, ScorePopup};
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
@@ -704,6 +706,8 @@ pub struct Readout {
     pub sub_weapon: Option<SubWeapon>,
     /// What a Detonator race's HUD shows; `None` in every other mode ([`detonator`]).
     pub detonator: Option<Detonator>,
+    /// The floating `+N` scores, by `ScoreFeedBack` widget ([`score_popup`]).
+    pub score_popups: [Option<ScorePopup>; SCORE_POPUPS],
     /// Whether the race is an event of the title's own single-player campaign (2048's
     /// `SP.xml`) - the object its HUD binds at `hud+4`. Without one the HUD draws no `RaceXPTxt`
     /// and no `ObjectiveTxt`: the 2048 DLC's HD and Fury Campaign events carry none. See

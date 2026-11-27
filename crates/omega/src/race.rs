@@ -190,6 +190,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         // its Detonator HUD binder is HD's lineage; the executable's `DetonatorGoldMedal`
         // strings are one site where HD's are two, so the binder itself is unread (`detonator-hud.md`).
         shows_medals: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+        // Its layout authors the same sixteen widgets as HD's; its caller of them is not
+        // located (`detonator-hud.md`, "The floating score").
+        floats_score: oag_title::pre_race::Sourced::chosen(false),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),

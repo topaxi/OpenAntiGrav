@@ -2725,7 +2725,9 @@ Whether ours' round then hits the same mine at the same age is not tested.
 **Not carried: the mine the original destroyed.** On `cannon-volley` the original scores 0000100 and ours 0000000, because the carried list is
 the mines armed at the pause. Adding that one mine (boot 1) makes ours score 0000100 too, but the frame goes 13.35 to 14.05 (15.78 with the
 speed pin): ours draws its blast as white puffs and long streaks where the original shows small shards and a `+100` (0.40 of the 0.70 added grey
-is above row 450). That is a draw gap in ours' mine blast, open.
+is above row 450). That is a draw gap in ours' mine blast, open. (The `+100` is drawn since 2026-11-27; it stands 15 px above the
+original's because ours' round hits 36 ticks before the picture and the original's about 27:
+[detonator-hud.md](../ghidra/functions/ps3-hdfury-eu/detonator-hud.md), "The floating score".)
 
 ### The `cannon-volley` difference, split by region (2026-11-26, `det-volley-split`)
 

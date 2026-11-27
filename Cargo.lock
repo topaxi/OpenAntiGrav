@@ -3616,6 +3616,7 @@ dependencies = [
  "log",
  "oag-2048",
  "oag-assets",
+ "oag-core",
  "oag-disc",
  "oag-display",
  "oag-hd",

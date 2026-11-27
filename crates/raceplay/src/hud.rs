@@ -271,14 +271,22 @@ pub(super) fn load_hud(
             );
         }
     }
+    let floats_score = title
+        .race
+        .detonator
+        .is_some_and(|detonator| detonator.floats_score.value);
     if mode == Mode::Detonator && layout.is_some() {
-        report.push(
+        let unfloated = if floats_score {
+            ""
+        } else {
+            " and no ScoreFeedBack0-15"
+        };
+        report.push(format!(
             "HUD: Detonator draws no EmpBarEffect (an ImageModel; its gauge is \
-             RaceSim::detonator_emp_gauge), no bomb-ahead warning and no ScoreFeedBack0-15; \
+             RaceSim::detonator_emp_gauge), no bomb-ahead warning{unfloated}; \
              PulseScore, PulseMultiplier, EmpScore and PulseBankedScore are never bound by the \
              original; the reload gauge is the craft's own material constant, not a HUD widget"
-                .to_string(),
-        );
+        ));
     }
 
     let space = oag_display::space::Space::of(

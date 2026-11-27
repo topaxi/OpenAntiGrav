@@ -281,8 +281,15 @@ for each slot with a position:
         rise  := 5.0 - 5.0 * alpha / 255                                   ; 0x008a77f0 = -1/255, 0x008a7710 = 5.0
         p     := at + rise * (view camera's row at +0x1e0)                 ; *(craft+0x6944), the viewing craft's camera
         widget+0xb0, +0xb4 := 0x00083f48(p)                                ; world to screen
-        set the text's alpha to alpha
+        set the text's alpha to alpha, and the second (border) colour's
 ```
+
+The alpha is a byte: the update reads the top byte of the second colour (widget `+0xc8`, getter
+`0x002005d8`), frees the slot when it is under `1`, multiplies, and writes `trunc(product)` into both the text
+colour (`+0xc4`, read by `0x00200460`, set by `Text_SetColour`) and the second one (`0x002005e0`), taking the
+rise off the untruncated product (decompiled again 2026-11-27, `det-score-popup`). At one update a 60 Hz
+tick the first values are `255, 249, 243, 237, 231`. The raise's dimming reads the same
+byte, truncates and writes both colours the same way (`255 -> 178`; `0x00083ba0` decompiled).
 
 So the `+N` stands at the scored object, rises 5 units along the camera's row (`+0x1e0`, read as up: the frame's popup
 sits above the blast) as it fades, and fades by a factor `(1 - dt) * 0.995` per update: at one update a tick
@@ -293,8 +300,31 @@ that agree on the slot layout; the fade and the rise against one frame), **55** 
 and for `0x00083f48` being the plain projection (neither read).
 
 This is the popup's first sighting in a frame ([eliminator-score.md](eliminator-score.md) caught none on Eliminator).
-**Not wired**: ours' HUD draws no `ScoreFeedBack` widget (below). 2048 and Omega: **not checkable** in this lane: the law is read
-in HD's executable only, and neither title's caller of its feedback widgets is located; no frame of either shows one.
+### Wired (2026-11-27, `det-score-popup`)
+
+`oag_hud::ScoreFeedback` holds the sixteen slots; `oag_hud::score_popup` draws each through the layout's own
+`ScoreFeedBack%d` widget (`HUD_scoring_feedback.xml`, embedded in `detonator_hud.xml`: font `HUDSmall`,
+centred, colour `0x00ffffff`, `BorderColor 0xffff0000`). The amount rides out of the simulation on
+`oag_weapons::detonator::Event::points` (`MineShot`, `MineChained`, `BombShot`, `MineEmped`, `BombEmped`; a
+streak's `AddFlat` raises none). **Chosen:** one update per 60 Hz tick with `dt = 1/60`; the original updates
+per frame, and with the fixed `0.995` per update its fade depends on its frame rate. The face takes HD's lit-text
+`0.8` like every other HUD string, the border does not. Gate: `oag_title::Detonator::floats_score`, HD only.
+**Chosen:** the position is copied at the raise (the original keeps a pointer into the object), the camera's
+up is the view matrix's second row, and the projection is the reticle's without its 250-unit range test.
+
+Against the `cannon-volley` pair's `+100` (the original's ink spans x 995-1070, y 420-443): ours spans x
+998-1073, y 405-427, the same size and colour. The 15 px is the popup's age, not the law: ours' round hits
+36 updates before the pair's picture, the original's blast reads about 27. Rendering ours' popup at 27 updates
+puts it at the original's height within 3 px (predicted from the rise, no fit). Pair mean grey 10.53 to 10.54;
+the box around the popup 17.11 to 22.42 on the published pair, because a popup 15 px off adds its own strokes
+to the difference. Moved to the original's rows (the layer alone, PIL greys) the box reads 18.14 without, 10.68
+with. With our round carried by the craft's speed (a prototype, not committed) the ink still stands 4 px high
+and the same box reads 18.27 with the popup off, 21.83 with it on: strokes this thin lower the box only once
+the age matches to the tick. The other five Detonator pairs are pixel-identical (none scores).
+
+**2048 and Omega: checked, applies, not wired.** Both author the sixteen widgets (Omega as HD's, scale 1.2;
+2048's skin in the `HUD` font at 0.6, same colours), so only the title flag holds them off: neither title's
+caller of them is located and no frame of either shows one.
 
 ## What stays open
 
@@ -329,7 +359,8 @@ which stands a race on a known cannon and compares the drawn texts exactly.
 Not drawn, and named in the loader report: the four widgets the original never binds
 (`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), `EmpBarEffect` (an
 `<ImageModel>`; its gauge is `RaceSim::detonator_emp_gauge`),
-`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread) and `ScoreFeedBack0`..`15`.
+`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread) and, on Omega and 2048, `ScoreFeedBack0`..`15`
+(HD draws them: "The floating score").
 The reload gauge is the craft's own `detonator_bulletgaugesegments` material
 constant, not a HUD widget: untouched.
 

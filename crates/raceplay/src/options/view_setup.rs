@@ -78,6 +78,8 @@ pub struct ViewSetup {
     pub detonator_cannon_lights: bool,
     /// Whether the EMP wave submits its point light: `Detonator::emp_light`.
     pub detonator_emp_light: bool,
+    /// Whether a Detonator score add floats its `+N`: `Detonator::floats_score`.
+    pub detonator_score_popups: bool,
     /// How fast a laid Detonator mine turns, radians per second of its age: `Detonator::mine_spin`,
     /// `None` off Detonator.
     pub detonator_mine_spin: Option<f32>,
@@ -365,6 +367,7 @@ impl ViewSetup {
             hd_missile_blast: false,
             detonator_cannon_lights: false,
             detonator_emp_light: false,
+            detonator_score_popups: false,
             detonator_mine_spin: None,
             detonator_ammo_gauge: None,
             detonator_hull_charge: None,

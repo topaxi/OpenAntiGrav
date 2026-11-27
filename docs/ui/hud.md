@@ -1399,7 +1399,7 @@ executable has no `KillsText`, and the frames show the widgets only `DATA00` aut
 | `TARGET ( 200 )` header | yes | no | **open** |
 | Ranked `NAME ( score )` rows, player's highlighted, rank digit and bracket | yes | no | **open** |
 | `MPWeaponIcon` | never in a single-player Eliminator, hidden at bind ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)) | no | closed |
-| `ScoreFeedBack` popups | authored, not caught in a frame | no | **open** |
+| `ScoreFeedBack` popups | authored, not caught in an Eliminator frame | no; Detonator draws them ([detonator-hud.md](../ghidra/functions/ps3-hdfury-eu/detonator-hud.md), "The floating score"), Eliminator's raise is not wired | **open** |
 
 Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
 of one of ours), the countdown frame against ours at tick 60 on the same circuit (Vineta K,
