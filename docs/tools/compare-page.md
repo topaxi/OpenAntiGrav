@@ -3360,3 +3360,36 @@ and `menu-team` 27.31, `pulse-psp/menu-team` 2.48: unchanged. Every other `menu-
 **Re-make the pairs** (the lead adopts the lane's re-made pairs):
 `pulse-psp/menu-pause` and `menu-title` and `pure-psp/menu-pause` are `compare-rerender-ours.py --only <pair>` from a tree with this lane; `pulse-ps2/menu-team`
 needs `--menu-model-seconds 0.575` in its recorded flags (and `original.ship_sway_fitted`; a fresh PCSX2 capture fits it itself).
+
+## Pure's lap-one close-up (2026-11-27, `menu-pairs`)
+
+Claim: the Pure race HUD's `LAP 1/3` sits where the original puts it, so the box `(0,225,60,47)` on `pure-psp/vineta`
+falls from 16.8 mean grey. **True.** The cause is not the layout XML (it authors `LapOf` at `x="27"` and `Lap Outof` at
+`x="40"`) but Pure's own `Hud_UpdateLapCounter`, which moves both left by 17 on lap one
+([hud-lap-counter.md](../ghidra/functions/psp-pure-usa/hud-lap-counter.md)). `oag_pure::hud::ART::lap_one_shift` now
+carries it.
+
+Copies of the stored pairs, ours re-rendered before and after, against the stored `theirs.png`. Box is `(0,225,60,47)`
+mean grey; the score is the page's mean grey over the frame. Every race pair is on lap one.
+
+| Pair | Box | Score |
+| --- | --- | --- |
+| Vineta | 16.99 -> 4.52 | 5.85 -> 5.58 |
+| Blue Ridge | 15.87 -> 4.30 | 6.32 -> 6.08 |
+| Chenghou | 18.53 -> 8.57 | 6.13 -> 5.92 |
+| Citta Nuova | 15.56 -> 4.09 | 6.34 -> 6.10 |
+| Karbonis | 13.36 -> 4.31 | 3.33 -> 3.14 |
+| Mandrashee | 13.30 -> 5.05 | 5.98 -> 5.81 |
+| Manor Top | 13.02 -> 4.84 | 4.95 -> 4.78 |
+| Modesto | 17.39 -> 3.43 | 3.82 -> 3.52 |
+| Sagarmartha | 14.43 -> 7.03 | 8.78 -> 8.63 |
+| Sebenco Climb | 44.40 -> 36.39 | 13.44 -> 13.28 |
+| Sinucit | 25.67 -> 14.68 | 13.86 -> 13.62 |
+| Sol 2 | 12.49 -> 5.13 | 8.71 -> 8.56 |
+| `menu-pause` | 16.96 -> 4.85 | 5.05 -> 4.80 |
+
+The two Zone pairs do not move (score and box equal). What is left in the box is the scenery behind the digits
+(Sebenco Climb and Sinucit sit over a bright background).
+
+`menu-pause` has no `ours.drive` beside the stored record on this machine: it was rebuilt from
+`scripts/pure-pause.drive` with `@TICKS@` 1612 (the record's `race_clock_read.basis`).

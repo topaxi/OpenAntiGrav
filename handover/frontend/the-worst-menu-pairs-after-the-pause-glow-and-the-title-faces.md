@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure]
-updated: 2026-11-24
-summary: "Open after the pause bloom and title faces: PS2 Ship Select heading face, title legal glyph pitch, Pure race HUD lap counter, PSP pause focus phase"
+updated: 2026-11-27
+summary: "Open after the pause bloom and title faces: PS2 Ship Select heading face, title legal glyph pitch, Pure HUD digit edges, PSP pause focus phase"
 categories: [rendering]
 size: M (55)
 difficulty: medium (50)
@@ -24,8 +24,8 @@ and the legal line wraps at 360, the PS2 team pair fits the craft's sway phase. 
   rounding as Pure's `snapped_quad` is the lead (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap").
 - **Title backdrop**: ours draws light rays across the top left that the original's frame lacks (`pulse-psp/menu-title`, top boxes 2.2 and 2.6); the backdrop movie's frame was never fitted for this pair
   (`compare-menu-movie-phase.py`).
-- **Pure's race HUD** (`pure-psp/menu-pause` 5.06 and `pure-psp/vineta` 6.04 share it): the lap counter `LAP 1/3` is laid out differently (the original's `1` is narrow with the slash right after it, ours
-  wider apart; box `(0,225,60,47)` 16.8 on both), the clock and bronze-time digits differ at their edges (11.4 and 12.5), and the pennants behind them move. A HUD and race lane, not the pause.
+- **Pure's race HUD** (`pure-psp/menu-pause`, `pure-psp/vineta`): the clock and bronze-time digits differ at their edges (11.4 and 12.5), and the pennants behind them move. A HUD
+  and race lane, not the pause. The lap counter is closed (`docs/tools/compare-page.md`, "Pure's lap-one close-up").
 - **The focused row's phase (PSP)**: the focused row's stamp rides the colour pulse and the pause drive route does not pin it (`--menu-focus-level`).
   The PS2 pause is measured and closed: its rows write no alpha, so it blooms nothing (`docs/ui/campaign-screens.md`, "The Selector's sprite is the only alpha writer
   of Pulse PS2's front end"); no PS2 pause pair exists to score.
@@ -34,4 +34,3 @@ and the legal line wraps at 360, the PS2 team pair fits the craft's sway phase. 
 
 1. A PCSX2 frame of the PS2 `MAIN MENU` and of Ship Select's heading at 1:1, then flip `title_font` for the PS2 skin and re-render every PS2 menu pair (an afternoon, wire).
 2. Fit the legal line's pitch against the frame (an hour to measure, then wire).
-3. Pure's lap counter against the executable's HUD layout (a separate HUD lane).
