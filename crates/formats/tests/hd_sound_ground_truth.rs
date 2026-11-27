@@ -293,3 +293,79 @@ fn decode_pcm16_produces_audio_not_noise() {
         "worst-case roughness {worst:.3} looks like noise"
     );
 }
+
+/// `data/sound/weapons.bnk` off the first archive: HD's HUD cues live there
+/// (the disc has no `hud.bnk`).
+fn weapons_bank(iso: &Path) -> Vec<u8> {
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", iso.display());
+    let mut archive = oag_assets::psarc::Archive::open(&spec).expect("DATA00");
+    archive
+        .read_path("/data/sound/weapons.bnk")
+        .expect("weapons.bnk")
+}
+
+fn hd_runner(blob: &[u8], name: &str) -> sblk::runner::Runner {
+    let bank = Bank::parse(blob).expect("weapons.bnk parses");
+    let cue = bank.cue_named(name).expect("named");
+    bank.cue_runner_modelled(
+        &cue,
+        sblk::timeline::WalkModel {
+            cue_variables: Some([0; 4]),
+            ..sblk::timeline::WalkModel::default()
+        },
+    )
+    .unwrap_or_else(|| panic!("{name} does not run"))
+}
+
+/// `(tick, pan angle)` of every key-on of the first `ticks` master ticks.
+fn run(runner: &mut sblk::runner::Runner, parameter: i8, ticks: u32) -> Vec<(u32, i32)> {
+    let mut rand = || 0;
+    let mut got = runner.start(&mut rand);
+    // The original writes variable 0 after it has started the cue.
+    runner.set_parameter(0, parameter);
+    for _ in 0..ticks {
+        got.extend(runner.tick(&mut rand));
+    }
+    got.into_iter().map(|g| (g.tick, g.angle)).collect()
+}
+
+/// HD's two repeating cues, as the lists in `weapons.bnk` author them
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Held cues run as
+/// lists").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_blowup_and_rocklock_run_their_lists() {
+    let Some(iso) = image() else {
+        return;
+    };
+    let blob = weapons_bank(&iso);
+
+    // `~ROCKLOCK`: variable 0 picks the bend and, with it, the tempo.
+    let mut seeking = hd_runner(&blob, "~ROCKLOCK");
+    assert_eq!(
+        run(&mut seeking, 0, 110),
+        vec![(50, 150), (53, 210), (103, 150), (106, 210)],
+        "seeking: a pair every 53 ticks"
+    );
+    assert_eq!(seeking.bend(), 0);
+    let mut locked = hd_runner(&blob, "~ROCKLOCK");
+    let beeps: Vec<u32> = run(&mut locked, 1, 105).iter().map(|k| k.0).collect();
+    assert_eq!(
+        beeps,
+        vec![65, 68, 83, 86, 101, 104],
+        "locked: 50 ticks for the pass already waiting, then a pair every 18"
+    );
+    assert_eq!(locked.bend(), 1548, "6 * 0x7fff / 0x7f");
+
+    // `~BLOWUP`: three voices at the start, then a 90/270 pair and a centred hit
+    // every 45 ticks.
+    let mut blowup = hd_runner(&blob, "~BLOWUP");
+    let keys = run(&mut blowup, 0, 90);
+    let pass = |t: u32| vec![(t, 90), (t + 5, 270), (t + 5, 0)];
+    let expected: Vec<(u32, i32)> = [vec![(0, 0), (0, 0), (0, 0)], pass(0), pass(45), pass(90)]
+        .concat()
+        .into_iter()
+        .filter(|k| k.0 <= 90)
+        .collect();
+    assert_eq!(keys, expected);
+}

@@ -36,8 +36,20 @@
 //! Anything else in the list - a child, an alternate group, a bend, a goto, a
 //! global-variable guard - is not run: [`Bank::cue_runner`] returns `None`
 //! rather than play a list it would run wrong.
+//!
+//! # HD's layout
+//!
+//! [`Bank::cue_runner_modelled`] under [`WalkModel::cue_variables`] reads the
+//! list as HD's PS3 handlers do. The stepper and the per-tick countdown are the
+//! same (`Scream_StepCommandList` `0x00625218`, `Scream_TickCommandList`
+//! `0x006253d0`), the byte operands sit one place over (`a` is `operand >> 16`),
+//! and four more things run: the alternate group `0x19`, the marker gotos
+//! `0x24`/`0x25`, the variable writes `0x1e`/`0x20`, the fixed bend `0x1c` and
+//! the stop `0x18`. The guard reads the same four bytes
+//! `Scream_SetCueParameter` writes (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`,
+//! "Held cues run as lists").
 
-use super::timeline::{Frame, Grain};
+use super::timeline::{Frame, Grain, WalkModel, variable_guard_skips};
 use super::{Bank, COMMAND_LEN, Cue, KEY_ON_OPCODES};
 
 const NOP_MARKER: u8 = 0x15;
@@ -45,6 +57,16 @@ const LOOP_BACK: u8 = 0x16;
 const GUARD: u8 = 0x22;
 const RANDOM_DELAY: u8 = 0x1a;
 const END: u8 = 0x2b;
+const STOP: u8 = 0x18;
+const ALTERNATE: u8 = 0x19;
+const FIXED_BEND: u8 = 0x1c;
+const SET_VARIABLE: u8 = 0x1e;
+const INCREMENT_VARIABLE: u8 = 0x20;
+const MARKER: u8 = 0x23;
+const GOTO: u8 = 0x24;
+const RANDOM_GOTO: u8 = 0x25;
+/// Gotos one tick may run before HD's `Scream_DoGrainGoto` refuses.
+const MAX_GOTOS_PER_TICK: u32 = 8;
 /// Opcodes that return zero and change nothing a runner reports.
 const PASS_THROUGH: [u8; 7] = [0x14, 0x1e, 0x1f, 0x20, 0x21, 0x23, NOP_MARKER];
 
@@ -61,6 +83,19 @@ struct Command {
     delay: i16,
 }
 
+/// Whether HD's layout runs a command that is not a key-on. A variable outside
+/// the handler's four (HD's global table) is not run.
+fn hd_runs(opcode: u8, operand: u32) -> bool {
+    let a = (operand >> 16) as u8 as i8;
+    let local = (0..PARAMETERS as i8).contains(&a);
+    match opcode {
+        GUARD | SET_VARIABLE | INCREMENT_VARIABLE => local,
+        0x14 | NOP_MARKER | LOOP_BACK | STOP | ALTERNATE | RANDOM_DELAY | FIXED_BEND | MARKER
+        | GOTO | RANDOM_GOTO | END => true,
+        _ => false,
+    }
+}
+
 /// A cue's command list, part-way through a play.
 #[derive(Debug, Clone)]
 pub struct Runner {
@@ -68,7 +103,17 @@ pub struct Runner {
     /// The grain each key-on command starts, at tick zero; indexed like
     /// `commands`.
     keyed: Vec<Option<Grain>>,
+    /// Whether the list is read with HD's operand bytes and extra opcodes.
+    hd: bool,
     parameters: [i8; PARAMETERS],
+    /// The handler's bend, `0x1c`'s write (`Scream_SetVoiceBend`).
+    bend: i16,
+    /// The last alternate each `0x19` picked, by command index; starts as the
+    /// bank's own byte, which the original caches in place.
+    last_pick: Vec<u8>,
+    /// An open alternate block: commands left in it, and the skip past the rest.
+    repeat: Option<(i32, i32)>,
+    gotos_this_tick: u32,
     pc: i32,
     countdown: i32,
     looped_this_tick: bool,
@@ -81,6 +126,16 @@ impl Bank<'_> {
     /// its list carries anything a runner does not run.
     #[must_use]
     pub fn cue_runner(&self, cue: &Cue) -> Option<Runner> {
+        self.cue_runner_modelled(cue, WalkModel::default())
+    }
+
+    /// [`Self::cue_runner`] under `model`: with [`WalkModel::cue_variables`] the
+    /// list is read as HD's handlers read it and the runner starts with those
+    /// four variables; the model's other switches are ignored.
+    #[must_use]
+    pub fn cue_runner_modelled(&self, cue: &Cue, model: WalkModel) -> Option<Runner> {
+        let hd = model.cue_variables.is_some();
+        let variables = model.cue_variables.unwrap_or_default();
         if !cue.plays() {
             return None;
         }
@@ -91,10 +146,11 @@ impl Bank<'_> {
             cue_volume: cue.volume,
             scale: 1.0,
             bend: None,
-            locals: [0; 4],
+            locals: variables,
         };
         let mut commands = Vec::with_capacity(cue.commands);
         let mut keyed = Vec::with_capacity(cue.commands);
+        let mut last_pick = Vec::with_capacity(cue.commands);
         for k in 0..cue.commands {
             let command = cue.first_command + k;
             let at = command * COMMAND_LEN;
@@ -107,6 +163,10 @@ impl Bank<'_> {
             if KEY_ON_OPCODES.contains(&opcode) {
                 let sound = sounds.iter().find(|s| s.command == command)?;
                 grain = Some(self.keyed(sound, 0, &frame));
+            } else if hd {
+                if !hd_runs(opcode, operand) {
+                    return None;
+                }
             } else if opcode == GUARD {
                 // A negative index reads a runtime global, not a parameter.
                 let variable = (operand & 0xff) as u8 as i8;
@@ -118,6 +178,7 @@ impl Bank<'_> {
             {
                 return None;
             }
+            last_pick.push((operand & 0xff) as u8);
             commands.push(Command {
                 opcode,
                 operand,
@@ -130,7 +191,12 @@ impl Bank<'_> {
             countdown: i32::from(first.delay),
             commands,
             keyed,
-            parameters: [0; PARAMETERS],
+            hd,
+            parameters: variables,
+            bend: 0,
+            last_pick,
+            repeat: None,
+            gotos_this_tick: 0,
             pc: 0,
             looped_this_tick: false,
             ended: false,
@@ -158,6 +224,13 @@ impl Runner {
         self.tick
     }
 
+    /// The handler's bend as `Scream_SetVoiceBend` holds it, `0` until a `0x1c`
+    /// runs. It reaches every voice the cue has keyed, sounding or not.
+    #[must_use]
+    pub fn bend(&self) -> i16 {
+        self.bend
+    }
+
     /// Writes cue parameter `index`, as `Scream_SetCueParameter` does. An
     /// index outside the four a handler holds is ignored, as in the original.
     pub fn set_parameter(&mut self, index: usize, value: i8) {
@@ -170,6 +243,7 @@ impl Runner {
     pub fn start(&mut self, rand: &mut dyn FnMut() -> u32) -> Vec<Grain> {
         let mut out = Vec::new();
         self.looped_this_tick = false;
+        self.gotos_this_tick = 0;
         let mut steps = 0;
         while !self.ended && self.countdown == 0 {
             steps += 1;
@@ -189,6 +263,7 @@ impl Runner {
         self.tick += 1;
         self.countdown -= 1;
         self.looped_this_tick = false;
+        self.gotos_this_tick = 0;
         let mut steps = 0;
         while !self.ended && self.countdown < 1 {
             steps += 1;
@@ -217,11 +292,54 @@ impl Runner {
                 None => return false,
             },
             GUARD => {
-                if self.guard_skips(command.operand) {
+                let skips = if self.hd {
+                    variable_guard_skips(command.operand, &self.parameters) == Some(true)
+                } else {
+                    self.guard_skips(command.operand)
+                };
+                if skips {
                     self.pc += 1;
                 }
             }
             END => self.pc = self.commands.len() as i32 - 1,
+            STOP if self.hd => return false,
+            FIXED_BEND if self.hd => self.bend = fixed_bend((command.operand >> 16) as u8 as i8),
+            SET_VARIABLE | INCREMENT_VARIABLE if self.hd => {
+                let a = usize::from((command.operand >> 16) as u8) % PARAMETERS;
+                self.parameters[a] = if command.opcode == SET_VARIABLE {
+                    (command.operand >> 8) as u8 as i8
+                } else {
+                    self.parameters[a].saturating_add(1)
+                };
+            }
+            GOTO | RANDOM_GOTO if self.hd => {
+                self.gotos_this_tick += 1;
+                if self.gotos_this_tick > MAX_GOTOS_PER_TICK {
+                    // The handler stays on this command and waits one tick more.
+                    self.pc -= 1;
+                    extra = 1;
+                } else {
+                    let low = (command.operand >> 16) as u8;
+                    let id = if command.opcode == GOTO {
+                        low
+                    } else {
+                        let high = (command.operand >> 8) as u8;
+                        let Some(span) = high.checked_sub(low) else {
+                            return false;
+                        };
+                        low + (rand() & 0xffff).rem_euclid(u32::from(span) + 1) as u8
+                    };
+                    let Some(marker) = self.marker(id) else {
+                        return false;
+                    };
+                    self.pc = marker - 1;
+                }
+            }
+            ALTERNATE if self.hd => {
+                if !self.alternate(command.operand, rand) {
+                    return false;
+                }
+            }
             _ => {
                 if let Some(Some(grain)) = usize::try_from(self.pc)
                     .ok()
@@ -234,6 +352,13 @@ impl Runner {
                 }
             }
         }
+        if let Some((left, skip)) = self.repeat.as_mut() {
+            *left -= 1;
+            if *left == 0 {
+                self.pc += *skip;
+                self.repeat = None;
+            }
+        }
         self.pc += 1;
         match usize::try_from(self.pc)
             .ok()
@@ -242,6 +367,41 @@ impl Runner {
             Some(next) => self.countdown = i32::from(next.delay) + extra,
             None => self.ended = true,
         }
+        true
+    }
+
+    /// The first `0x23` marker carrying `id`.
+    fn marker(&self, id: u8) -> Option<i32> {
+        self.commands
+            .iter()
+            .position(|c| c.opcode == MARKER && (c.operand >> 16) as u8 == id)
+            .map(|k| k as i32)
+    }
+
+    /// `Scream_DoGrainAlternate` (`0x00625e88`): draw one of `count` blocks of
+    /// `stride` commands, never the last draw, run it and skip the rest. A
+    /// second group opened inside a block kills the handler, as a zero count
+    /// does here (the original divides by it).
+    fn alternate(&mut self, operand: u32, rand: &mut dyn FnMut() -> u32) -> bool {
+        let count = i32::from((operand >> 16) as u8 as i8);
+        let stride = i32::from((operand >> 8) as u8 as i8);
+        let Some(last) = usize::try_from(self.pc)
+            .ok()
+            .and_then(|pc| self.last_pick.get_mut(pc))
+        else {
+            return false;
+        };
+        if self.repeat.is_some() || count <= 0 || stride <= 0 {
+            return false;
+        }
+        let mut pick = (rand() & 0xffff) as i32 % count;
+        if i32::from(*last as i8) == pick {
+            pick = (pick + 1) % count;
+        }
+        *last = pick as u8;
+        self.pc += pick * stride;
+        // This command counts one down, so the block's `stride` follow it.
+        self.repeat = Some((stride + 1, (count - pick - 1) * stride));
         true
     }
 
@@ -268,6 +428,15 @@ impl Runner {
             2 => variable <= immediate,
             _ => false,
         }
+    }
+}
+
+/// `Scream_DoGrainSetBend`'s (`0x006242b0`) word for operand `a`.
+fn fixed_bend(a: i8) -> i16 {
+    if a < 0 {
+        i16::from(a) << 8
+    } else {
+        (i32::from(a) * 0x7fff / 0x7f) as i16
     }
 }
 

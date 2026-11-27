@@ -69,17 +69,17 @@ pub trait CueTables: Copy {
     fn held(self) -> bool;
 
     /// Whether this cue's list repeats while held, so it plays as the list runs
-    /// rather than as one timeline or one picked waveform: `~BLOWUP`
-    /// (`[key-on loop, 0x15, key-on, 0x1a, 0x16]`, the second waveform re-keyed
-    /// every 43 master ticks) and `~ROCKLOCK` (a guard on cue parameter 0 before
-    /// each of two key-ons, in a `0x15`/`0x16` loop). See `oag_formats::sblk::runner`.
+    /// rather than as one timeline or one picked waveform: `~BLOWUP` (a
+    /// `0x15`/`0x16` loop around a re-keyed voice) and `~ROCKLOCK` (guards on cue
+    /// parameter 0 inside such a loop). Pulse's and HD's lists differ; see
+    /// `oag_formats::sblk::runner`.
     #[must_use]
     fn repeats(self) -> bool;
 
     /// Whether an HD walk of this cue's list is wired: a one-shot of the hud,
-    /// ship or weapons bank. Held and repeating cues keep one waveform (their
-    /// lists loop and re-key, which only a runner plays), and `~ENGINE` is one
-    /// voice driven per tick.
+    /// ship or weapons bank. A held cue keeps one waveform unless it
+    /// [repeats](Self::repeats) (a looping list only a runner plays), and
+    /// `~ENGINE` is one voice driven per tick.
     #[must_use]
     fn walks_variables(self) -> bool;
 

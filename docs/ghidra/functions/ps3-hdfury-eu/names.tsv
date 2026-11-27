@@ -1292,3 +1292,5 @@
 0x00ad5fd4	data	Psys_LastRootHandle	75	detonator-mine.md
 0x0008ce10	function	Hud_UpdateZoneWidgets	80	zone-score.md
 
+0x00624418	function	Scream_SetCueParameter	90	cue-variables.md
+0x00087fa8	function	HudSight_UpdateTone	80	cue-variables.md
