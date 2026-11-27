@@ -957,6 +957,7 @@ pub(crate) fn race_launch(
                     .as_ref()
                     .map(|m| m.0.clone()),
                 detonator_mine_ages: cli.detonator.mine_ages.as_ref().map(|m| m.0.clone()),
+                detonator_mine_volumes: cli.detonator.mine_volumes.as_ref().map(|m| m.0.clone()),
                 detonator_emp_charge: cli.detonator.emp_charge,
                 detonator_gauge_speed: cli.detonator.gauge_speed,
                 pose_sparks: pose_sparks(cli)?,

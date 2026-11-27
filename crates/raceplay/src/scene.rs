@@ -473,6 +473,9 @@ pub struct Scene {
     /// handed in before each frame by [`Scene::set_band_levels`]. Silent until then. Read by the
     /// Detonator mine's envelope ([`crate::detonator_look`]).
     band_levels: std::cell::Cell<[f32; 16]>,
+    /// The audio output's whole-spectrum level (`oag_audio::Spectrum::total`), handed in before
+    /// each frame by [`Scene::set_music_level`]. Read by the Detonator mine's visualiser.
+    music_level: std::cell::Cell<f32>,
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
@@ -1243,6 +1246,7 @@ impl Scene {
             blur_half: std::cell::Cell::new(false),
             squeeze: std::cell::Cell::new(1.0),
             band_levels: std::cell::Cell::new([0.0; 16]),
+            music_level: std::cell::Cell::new(0.0),
             velocity,
             histories: (0..motion::HISTORY_COUNT)
                 .map(|_| motion::History::default())

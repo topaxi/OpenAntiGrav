@@ -300,6 +300,9 @@ pub struct CaptureOptions {
     /// `--detonator-mine-ages`: the age of each `detonator_mines` position's mine, in its order, held as the original
     /// read it ([`oag_raceplay::Race::pin_mines`]).
     pub detonator_mine_ages: Option<Vec<f32>>,
+    /// `--detonator-mine-volumes`: the visualiser's `MasterVolume` and `PitchVolume` of each `detonator_mines`
+    /// position's mine, in its order, held as the original read them ([`oag_raceplay::Race::pin_mines`]).
+    pub detonator_mine_volumes: Option<Vec<(f32, f32)>>,
     /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--detonator-gauge-speed` ([`oag_raceplay::Race::pin_ammo_gauge_speed`]).
@@ -538,6 +541,10 @@ pub fn capture(
                     .detonator_mine_ages
                     .as_ref()
                     .and_then(|ages| ages.get(at).copied()),
+                volumes: options
+                    .detonator_mine_volumes
+                    .as_ref()
+                    .and_then(|volumes| volumes.get(at).copied()),
             };
             lane.filter(|_| pin != oag_raceplay::MinePin::default())
                 .map(|lane| (lane, pin))

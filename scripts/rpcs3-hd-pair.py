@@ -325,6 +325,10 @@ def mine_flags(pair, ship):
     if all(m.get("age_s") is not None for m in mines):
         flags += ["--detonator-mine-ages", ";".join("%.4f" % m["age_s"] for m in mines)]
         pair.caveat("each mine's age (`+0xc0`), which turns it about its up axis, is held in ours (`--detonator-mine-ages`)")
+    volumes = ce.detonator_mine_volume_flags(mines)
+    if volumes:
+        flags += volumes
+        pair.caveat("each mine's ring `MasterVolume` and `PitchVolume` (`+0x104`, `+0x10c`) are held in ours (`--detonator-mine-volumes`)")
     return flags
 
 
