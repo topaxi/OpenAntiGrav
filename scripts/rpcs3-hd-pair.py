@@ -438,9 +438,11 @@ def capture_command(args, out):
         if not args.keep_autopilot:
             cap += ["--autopilot-timer", AUTOPILOT_AUTHORED_S]
     elif args.zone:
-        # Zone flies itself and its countdown is 5.2 s: the default 12 s settle would capture the race, so the first shot is
-        # taken where the attach pauses it.
+        # Zone flies itself and its countdown is about 3 s: the default 12 s settle would capture the race, so the first shot
+        # is taken where the attach pauses it.
         cap += ["--in-race", "--settle", "0", "--first-at-pause"]
+        if args.countdown:
+            cap += ["--wait-countdown", args.countdown_at, "--timeout", "600"]
     return cap
 
 
@@ -492,8 +494,11 @@ def main():
                          "paused frame; recorded as read off the frame) and, with STAGE, the colour-grade stage pinned "
                          "(`--zone-stage`)")
     ap.add_argument("--countdown", action="store_true",
-                    help="with --zone: a race-start frame. The pause must find the race manager in its countdown (refused "
-                         "otherwise) and ours is drawn without `--hud-state`, as the original draws no HUD yet")
+                    help="with --zone: a race-start frame. The capture waits for the countdown (start it with START RACE or "
+                         "Restart Race while the script waits), the pause must find the race manager in it (refused otherwise) "
+                         "and ours is drawn without `--hud-state`, as the original draws no HUD yet")
+    ap.add_argument("--countdown-at", type=float, default=1.0, metavar="SECONDS",
+                    help="with --countdown: how far into the countdown the capture attaches")
     ap.add_argument("--detonator", action="store_true",
                     help="a Detonator race shot (`rpcs3-hd-detonator-shots.py` record, passed with --json): ours runs its own countdown and "
                          "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "

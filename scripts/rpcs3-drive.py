@@ -1843,6 +1843,11 @@ def cmd_capture(args):
         shots = []
         field_record = None
         autopilot_note = None
+        if args.wait_countdown is not None:
+            import rpcs3_hd_field
+            print("waiting for %.1f s into the countdown" % args.wait_countdown, flush=True)
+            reached = rpcs3_hd_field.wait_countdown(rpcs3_hd_field.Mem(session.open_mem()), args.wait_countdown, args.timeout)
+            print("  countdown at %.2f s; attaching" % reached["elapsed_s"], flush=True)
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
@@ -2711,6 +2716,10 @@ def main(argv=None):
                      help="also read every craft of the field (pose, team, lap clock) and the HUD's record "
                           "(lap, place, speed, shield) at each pause, into the record's `ship.field` and "
                           "`ship.hud` (`rpcs3_hd_field.py`); needs `serve` (attached)")
+    cap.add_argument("--wait-countdown", type=float, metavar="SECONDS",
+                     help="attached: poll the race manager (no pause) until it is this far into its countdown (phase 1, about "
+                          "3 s long), then attach and take the first shot; gives up after --timeout. The caller starts the "
+                          "race (START RACE or Restart Race) while this waits")
     cap.add_argument("--first-at-pause", action="store_true",
                      help="the first shot is taken where the emulator already stands, without running "
                           "for `--interval` first: a state restored with `emu-restore-state.sh --pause` "

@@ -19,6 +19,7 @@ Raw reads are game memory: nothing here is written to a tracked file.
 """
 
 import struct
+import time
 
 GUEST = 0x300000000
 CRAFT_ARRAY = 0x0098D7C0
@@ -72,6 +73,25 @@ def race_phase(m):
         return None
     block = m.rd(manager + RACE_PHASE_BLOCK, 0x28)
     return {"phase": struct.unpack_from(">I", block, 0x20)[0], "elapsed_s": struct.unpack_from(">f", block, 0x18)[0]}
+
+
+def wait_countdown(m, elapsed_s, timeout, clock=time.monotonic, sleep=time.sleep, say=print):
+    """Poll, without pausing, until the race manager is `elapsed_s` into its countdown; returns that `race_phase`.
+
+    The countdown is about 3 s, shorter than a capture script takes to start, so the wait runs inside the capture, with
+    only the debugger attach after it. Raises `TimeoutError`.
+    """
+    began = told = clock()
+    while True:
+        now = race_phase(m)
+        if now and now["phase"] == COUNTDOWN_PHASE and now["elapsed_s"] >= elapsed_s:
+            return now
+        if clock() - began > timeout:
+            raise TimeoutError("no countdown within %.0f s (race manager %s)" % (timeout, now))
+        if clock() - told >= 10:
+            say("  waiting for the countdown (race manager %s)" % (now,))
+            told = clock()
+        sleep(0.05)
 
 
 class Mem:

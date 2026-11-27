@@ -304,11 +304,48 @@ def check_hd_countdown():
     flags = hd_pair.zone_flags(Pair(), "1,0", countdown=True)
     assert "--hud-state" not in flags, flags
     assert hd_pair.zone_flags(Pair(), "5,100,4", countdown=False) == ["--hud-state", "1,1,0,0,0,100,0,5,100,0", "--zone-stage", "4"]
-    args = argparse.Namespace(interval=0.12, load=0, team="feisar", press="none", field=False, zone="1,0", keep_autopilot=False)
+    args = argparse.Namespace(interval=0.12, load=0, team="feisar", press="none", field=False, zone="1,0", keep_autopilot=False,
+                              countdown=False, countdown_at=1.0)
     cap = [str(c) for c in hd_pair.capture_command(args, Path("o"))]
-    assert cap[cap.index("--settle") + 1] == "0" and "--first-at-pause" in cap, cap
+    assert cap[cap.index("--settle") + 1] == "0" and "--first-at-pause" in cap and "--wait-countdown" not in cap, cap
+    args.countdown = True
+    cap = [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+    assert cap[cap.index("--wait-countdown") + 1] == "1.0", cap
     args.zone = None
     assert "--settle" not in [str(c) for c in hd_pair.capture_command(args, Path("o"))]
+
+
+def check_hd_wait_countdown():
+    """`wait_countdown` returns only once the race manager is `elapsed_s` into phase 1 (not in the race phase before the
+    reload, not at the first tick of the countdown) and gives up on a timeout."""
+    import rpcs3_hd_field as field
+    reads = iter([(2, 40.0), (0, 1.0), (1, 0.2), (1, 1.1), (2, 0.1)])
+
+    class Mem:
+        def u32(self, addr):
+            return 0x4000 if addr == field.RACE_MANAGER_PP else 0
+
+        def rd(self, _addr, n):
+            phase, elapsed = next(reads)
+            block = bytearray(n)
+            struct.pack_into(">f", block, 0x18, elapsed)
+            struct.pack_into(">I", block, 0x20, phase)
+            return bytes(block)
+
+    got = field.wait_countdown(Mem(), 1.0, 30.0, clock=lambda: 0.0, sleep=lambda _s: None, say=lambda _t: None)
+    assert got["phase"] == 1 and abs(got["elapsed_s"] - 1.1) < 1e-6, got
+    ticks = iter(range(1000))
+
+    class Never(Mem):
+        def rd(self, _addr, n):
+            return bytes(n)
+
+    try:
+        field.wait_countdown(Never(), 1.0, 5.0, clock=lambda: float(next(ticks)), sleep=lambda _s: None, say=lambda _t: None)
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("no countdown must time out")
 
 
 def check_hd_pilot_assist():
@@ -559,6 +596,7 @@ def main():
     check_hd_hull()
     check_hd_pilot_assist()
     check_hd_countdown()
+    check_hd_wait_countdown()
     check_detonator_volley_ticks()
     with tempfile.TemporaryDirectory() as t:
         check_detonator_picture_tick(Path(t))
