@@ -29,7 +29,7 @@ public class PadImporterVtableDiff2 extends GhidraScript {
     @Override
     public void run() throws Exception {
         String out = getScriptArgs().length > 0 ? getScriptArgs()[0]
-            : "/tmp/pad-importer-vtable-diff2.txt";
+            : "data/scratch/pad-importer-vtable-diff2.txt";
         PrintWriter w = new PrintWriter(new FileWriter(out));
 
         long[] weapon = readVtable(WEAPON_VTABLE, w, "weapon");

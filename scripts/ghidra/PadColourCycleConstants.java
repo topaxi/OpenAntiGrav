@@ -16,7 +16,7 @@ import ghidra.program.model.address.Address;
 public class PadColourCycleConstants extends GhidraScript {
     @Override
     public void run() throws Exception {
-        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "/tmp/pad-colour-cycle-constants.txt";
+        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "data/scratch/pad-colour-cycle-constants.txt";
         PrintWriter w = new PrintWriter(new FileWriter(out));
 
         w.println("DAT_008b42f8 (refresh-timer floor) = " + f(0x008b42f8L));

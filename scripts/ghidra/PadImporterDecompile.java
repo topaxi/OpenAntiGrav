@@ -32,7 +32,7 @@ public class PadImporterDecompile extends GhidraScript {
 
     @Override
     public void run() throws Exception {
-        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "/tmp/pad-importer-decompile.txt";
+        String out = getScriptArgs().length > 0 ? getScriptArgs()[0] : "data/scratch/pad-importer-decompile.txt";
         PrintWriter w = new PrintWriter(new FileWriter(out));
 
         DecompInterface decomp = new DecompInterface();

@@ -40,6 +40,10 @@ import struct
 import sys
 import time
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -130,7 +134,7 @@ def current_decoder():
 
 def main():
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
-    out = Path(positional[0] if positional else "/tmp/hd-fury-backdrop-break")
+    out = Path(positional[0] if positional else oag_tmp.output("hd-fury-backdrop-break"))
     out.mkdir(parents=True, exist_ok=True)
     previous = current_decoder()
     set_decoder("Interpreter (static)")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HD/Fury's `vwipe` Image widgets in a running RPCS3: find them, and read when a page's wipe starts.
 
-    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=/tmp/oag-<lane>-cache
+    source data/scratch/<lane>/env.sh ; export XDG_CACHE_HOME=$PWD/data/scratch/<lane>/cache
     OAG_COMPARE_PLATFORM=hd-fury python3 scripts/rpcs3-drive.py --image data/images/hdfury-ps3-eu.iso serve
     OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-vwipe.py scan --out data/scratch/<lane>/widgets.json
     OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-vwipe.py watch --widgets data/scratch/<lane>/widgets.json \\

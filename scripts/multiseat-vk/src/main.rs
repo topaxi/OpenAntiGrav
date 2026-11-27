@@ -72,7 +72,8 @@ fn main() {
     text.push(0);
     let file = std::fs::File::open(keymap_path).unwrap();
     // the size includes the terminating NUL, which the file lacks: map a copy that has one
-    let tmp = std::env::temp_dir().join(format!("vk-keymap-{}", std::process::id()));
+    // Beside the keymap it copies, never in the OS temp directory.
+    let tmp = format!("{keymap_path}.nul-{}", std::process::id());
     std::fs::write(&tmp, &text).unwrap();
     drop(file);
     let f = std::fs::File::open(&tmp).unwrap();

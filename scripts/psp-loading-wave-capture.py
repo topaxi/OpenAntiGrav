@@ -65,6 +65,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ppsspp_debugger import Debugger
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 LOADING_SHOW = 0x0890AED8  # entry point, dispatches on a0 = screen type
 COLUMN_BREAK = 0x0890ABBC  # inside Loading_DrawWave, once per column, after both layers update
@@ -149,7 +153,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=47800)
     parser.add_argument("--hits", type=int, default=260)
-    parser.add_argument("--out", default="/tmp/loading-wave.csv")
+    parser.add_argument("--out", default=oag_tmp.output("loading-wave.csv"))
     parser.add_argument("--per-hit-timeout", type=float, default=20.0)
     args = parser.parse_args()
 

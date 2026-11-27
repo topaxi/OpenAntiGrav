@@ -44,7 +44,7 @@ public class PadImporterVtableDiff extends GhidraScript {
     @Override
     public void run() throws Exception {
         String out = getScriptArgs().length > 0 ? getScriptArgs()[0]
-            : "/tmp/pad-importer-vtable-diff.txt";
+            : "data/scratch/pad-importer-vtable-diff.txt";
         PrintWriter w = new PrintWriter(new FileWriter(out));
 
         w.println("# WeaponPad_Importer (" + hex(WEAPON_VTABLE)

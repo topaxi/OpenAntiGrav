@@ -81,14 +81,23 @@ impl Drop for TempDir {
 /// If it cannot be created.
 pub fn dir(label: &str) -> TempDir {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let path = root().join("scratch").join(format!(
+    at(root().join("scratch").join(format!(
         "{label}-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    // A killed run may have left this name behind, and process ids are reused.
+    )))
+}
+
+/// [`dir`] at a path the caller names, for the work that measurably cannot live
+/// under `target/` (say why at the call). Whatever is there goes first, so a
+/// killed run's leftovers are not added to.
+///
+/// # Panics
+///
+/// If it cannot be created.
+pub fn at(path: PathBuf) -> TempDir {
     let _ = std::fs::remove_dir_all(&path);
-    std::fs::create_dir_all(&path).expect("a scratch directory under target/tmp");
+    std::fs::create_dir_all(&path).expect("a scratch directory");
     TempDir {
         root: path.clone(),
         path,

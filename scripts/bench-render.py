@@ -36,8 +36,11 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-LOCK = pathlib.Path(os.environ.get("HOME", "/tmp")) / ".cache/oag/gate.lock"
+LOCK = pathlib.Path.home() / ".cache/oag/gate.lock"
 
 # The fixed race of each title. **Chosen, not measured**: nothing here is read
 # off an original, it is a repeatable workload. Every title races its own
@@ -122,7 +125,7 @@ def run_one(binary, title, out, profile, case="1", size=DEFAULT_SIZE, repeat_nam
     flags = [*COMMON, "--size", size, *CASES[case], *(["--motion-blur", blur] if blur else []),
              *(["--motion-blur-resolution", blur_resolution] if blur_resolution else []),
              *(["--shadow-resolution", shadow_resolution] if shadow_resolution else [])]
-    tmp = pathlib.Path(tempfile.mkdtemp(prefix=f"oag-bench-{title}-"))
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix=f"oag-bench-{title}-", dir=oag_tmp.temp_root()))
     try:
         env = dict(os.environ)
         env["OAG_RENDER_BENCH_RACE"] = str(stem)

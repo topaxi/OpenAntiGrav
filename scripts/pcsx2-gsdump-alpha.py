@@ -29,6 +29,9 @@ import struct
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("gsdump", os.path.join(HERE, "pcsx2-gsdump.py"))
 gsdump = importlib.util.module_from_spec(spec)
@@ -101,7 +104,7 @@ def main():
 
     def decode(n):
         keep = [k for k in range(field_end) if pk[k][0] != 0 or k <= transfers[n - 1]]
-        with tempfile.NamedTemporaryFile(suffix=".gs", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".gs", delete=False, dir=oag_tmp.temp_root()) as f:
             f.write(data[:start] + b"".join(data[pk[k][1]:pk[k][2]] for k in keep))
         try:
             return gsdump.run(f.name)

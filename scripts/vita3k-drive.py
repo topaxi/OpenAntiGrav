@@ -98,6 +98,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pad_seat  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 #: `OAG_VITA3K_CACHE` moves every file this tool writes (config, pid file,
 #: frames, pipeline marker) to a directory of its own, so two members' Vita3K
 #: instances never share a pid file; `OAG_VITA3K_CONFIG` names the config
@@ -437,7 +440,7 @@ def screenshot(display_num, wid, out_path):
 
 def _frame_digest(display_num, wid):
     import hashlib
-    probe = Path("/tmp/.vita3k-drive-probe-%d.png" % display_num)
+    probe = oag_tmp.temp_root() / ("vita3k-drive-probe-%d.png" % display_num)
     screenshot(display_num, wid, probe)
     return hashlib.md5(probe.read_bytes()).hexdigest()
 

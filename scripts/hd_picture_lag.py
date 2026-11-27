@@ -20,6 +20,10 @@ between `Z_MIN` and `Z_MAX` units, fewer than two whose own best fit lands withi
 import json
 import sys
 from pathlib import Path
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
 
 Z_MIN, Z_MAX = 8.0, 50.0
 #: A mine's blob is searched inside a window of `WINDOW_PX * focal / depth`, capped at `WINDOW_CAP`.
@@ -215,7 +219,7 @@ def self_test():
         x, y = (p[0] / p[3] * 0.5 + 0.5) * width, (0.5 - p[1] / p[3] * 0.5) * height
         yy, xx = np.ogrid[:height, :width]
         image[(xx - x) ** 2 + (yy - y) ** 2 < 14 ** 2] = (230, 200, 255)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=oag_tmp.temp_root()) as tmp:
         path = Path(tmp) / "theirs.png"
         Image.fromarray(image).save(path)
         camera = {"eye": eye.tolist(), "forward": [1, 0, 0], "view_proj": view_proj.flatten().tolist()}

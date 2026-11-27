@@ -27,6 +27,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oag_tmp  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compare_env as ce  # noqa: E402
@@ -67,7 +70,7 @@ def main():
     ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
     args = ap.parse_args()
     pairs = Path(args.pairs or ROOT / "data/reference/compare-page" / args.title)
-    scratch = Path(tempfile.mkdtemp(prefix="resting-yaw-"))
+    scratch = Path(tempfile.mkdtemp(prefix="resting-yaw-", dir=oag_tmp.temp_root()))
     env = dict(os.environ, XDG_CONFIG_HOME=str(scratch / "c"), XDG_DATA_HOME=str(scratch / "d"),
                XDG_STATE_HOME=str(scratch / "s"))
     try:
