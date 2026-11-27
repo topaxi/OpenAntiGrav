@@ -115,6 +115,7 @@ pub(super) fn pad_ne(
             })
             .clone();
         let (Some(colour), Some(texture)) = (colour, texture) else {
+            super::census::claim(slot, "pad_ne", super::census::Outcome::NotDrawn);
             report.pad_ne_unread += 1;
             continue;
         };
@@ -132,6 +133,7 @@ pub(super) fn pad_ne(
             })
         });
         let Some(index) = index else {
+            super::census::claim(slot, "pad_ne", super::census::Outcome::NotDrawn);
             report.pad_ne_unread += 1;
             continue;
         };
@@ -167,6 +169,7 @@ pub(super) fn pad_ne(
             *word |= slots::PAD_NE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
+        super::census::claim(slot, "pad_ne", super::census::Outcome::Drawn);
         report.pad_ne_bound += 1;
     }
     out

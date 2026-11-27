@@ -155,6 +155,7 @@ pub(super) fn skin(
                         .clone();
                     if baked.is_some() {
                         decoded = baked;
+                        super::census::claim(slot, "picture_tint", super::census::Outcome::Drawn);
                         report.picture_tinted += 1;
                     }
                 }
@@ -892,7 +893,11 @@ pub(super) fn roles(
                 .iter()
                 .find(|p| p.hash == super::rim_glow::RIM_EDGE_ALPHA)
                 .map(|p| p.value[0]);
-            packed |= super::rim_glow::classify(d, p, alpha);
+            let rim = super::rim_glow::classify(d, p, alpha);
+            if rim != 0 {
+                super::census::claim(slot, "rim_glow", super::census::Outcome::Drawn);
+            }
+            packed |= rim;
         }
         let (first_unit, second_unit) = units(
             declared.as_ref(),

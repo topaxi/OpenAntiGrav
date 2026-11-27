@@ -125,6 +125,11 @@ pub(super) fn plan(
             ))
         })();
         let Some((first, (second, wipe, _), pair)) = read else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "electricity",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.electricity_unread += 1;
             continue;
         };
@@ -135,6 +140,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "electricity",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.electricity_unread += 1;
             continue;
         };
@@ -147,6 +157,11 @@ pub(super) fn plan(
                 wipe,
                 bars: None,
             },
+        );
+        crate::mesh::rcs::census::claim(
+            index,
+            "electricity",
+            crate::mesh::rcs::census::Outcome::Drawn,
         );
         report.electricity_materials += 1;
     }

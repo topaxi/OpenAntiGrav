@@ -129,6 +129,7 @@ pub(super) fn mine_rim(
         }
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "mine_rim", super::census::Outcome::Drawn);
         report.mine_rim_bound += 1;
     }
     maps

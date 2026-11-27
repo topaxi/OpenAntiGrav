@@ -71,6 +71,7 @@ pub(super) fn bomb_tint(
         };
         *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
         *word |= index << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "bomb_tint", super::census::Outcome::Drawn);
         report.bomb_tint_bound += 1;
     }
 }

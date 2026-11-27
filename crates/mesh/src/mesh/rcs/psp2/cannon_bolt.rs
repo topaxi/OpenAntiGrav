@@ -86,6 +86,11 @@ pub(super) fn plan(
             Some((strip, entry(tint, fresnel)))
         })();
         let Some((strip, entry)) = read else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "cannon_bolt",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.cannon_bolt_unread += 1;
             continue;
         };
@@ -96,6 +101,11 @@ pub(super) fn plan(
             })
         });
         let Some(slot) = at.and_then(|at| u32::try_from(at + 1).ok()) else {
+            crate::mesh::rcs::census::claim(
+                index,
+                "cannon_bolt",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.cannon_bolt_unread += 1;
             continue;
         };
@@ -108,6 +118,11 @@ pub(super) fn plan(
                 wipe: strip,
                 bars: None,
             },
+        );
+        crate::mesh::rcs::census::claim(
+            index,
+            "cannon_bolt",
+            crate::mesh::rcs::census::Outcome::Drawn,
         );
         report.cannon_bolt_materials += 1;
     }

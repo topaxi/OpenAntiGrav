@@ -77,6 +77,7 @@ pub(super) fn hull_overlay(
         });
         let Some(index) = index else { continue };
         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        super::census::claim(slot, "hull_overlay", super::census::Outcome::Drawn);
         report.hull_overlay_bound += 1;
     }
 }

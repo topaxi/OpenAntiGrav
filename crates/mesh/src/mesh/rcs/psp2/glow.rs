@@ -94,7 +94,7 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
     let mut out = Plan::default();
     let mut decoded: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         std::collections::HashMap::new();
-    for material in materials {
+    for (index, material) in materials.iter().enumerate() {
         let layer = layer_of(material).and_then(|(emissive, path, diffuse)| {
             let texture = decoded
                 .entry(path.clone())
@@ -116,6 +116,13 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
                 diffuse,
             })
         });
+        if layer.is_some() {
+            crate::mesh::rcs::census::claim(
+                index,
+                "glow_layer",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
+        }
         report.glow_layers += usize::from(layer.is_some());
         out.layers.push(layer);
 

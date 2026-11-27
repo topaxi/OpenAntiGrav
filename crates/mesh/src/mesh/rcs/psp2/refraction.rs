@@ -138,17 +138,32 @@ pub(super) fn plan(
             let constant1 = material.param(CONSTANT1).filter(|c| c.len() >= 3);
             let refraction = material.param(REFRACTION).and_then(|v| v.first().copied());
             let (Some(c), Some(refraction)) = (constant1, refraction) else {
+                crate::mesh::rcs::census::claim(
+                    at,
+                    "refraction",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
                 report.refraction_unread += 1;
                 continue;
             };
             let entry = ice_layer([c[0], c[1], c[2]], refraction);
             let index = table_index(emissive, entry).and_then(|i| u32::try_from(i + 1).ok());
             let Some(index) = index else {
+                crate::mesh::rcs::census::claim(
+                    at,
+                    "refraction",
+                    crate::mesh::rcs::census::Outcome::NotDrawn,
+                );
                 report.refraction_unread += 1;
                 continue;
             };
             out.roles[at] = slots::REFRACTION | (index << slots::MATERIAL_SHIFT);
             out.ice[at] = true;
+            crate::mesh::rcs::census::claim(
+                at,
+                "refraction",
+                crate::mesh::rcs::census::Outcome::Drawn,
+            );
             report.refraction_bound += 1;
             continue;
         }
@@ -157,6 +172,11 @@ pub(super) fn plan(
         }
         let weight = material.param(WEIGHT).filter(|w| w.len() >= 3);
         let Some(weight) = weight else {
+            crate::mesh::rcs::census::claim(
+                at,
+                "refraction",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.refraction_unread += 1;
             continue;
         };
@@ -172,10 +192,16 @@ pub(super) fn plan(
         );
         let index = table_index(emissive, entry).and_then(|i| u32::try_from(i + 1).ok());
         let Some(index) = index else {
+            crate::mesh::rcs::census::claim(
+                at,
+                "refraction",
+                crate::mesh::rcs::census::Outcome::NotDrawn,
+            );
             report.refraction_unread += 1;
             continue;
         };
         out.roles[at] = slots::REFRACTION | (index << slots::MATERIAL_SHIFT);
+        crate::mesh::rcs::census::claim(at, "refraction", crate::mesh::rcs::census::Outcome::Drawn);
         report.refraction_bound += 1;
     }
     out
