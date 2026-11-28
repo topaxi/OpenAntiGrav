@@ -232,7 +232,7 @@ texture upload cache is per `Scene::new`).
 | Pulse, S21 | 94 | 235 | about 330 |
 | HD, RX 7800 XT | 748 | 655, 591 to 710 (745 against pre) | about 1.3 to 1.5 GiB, half of it VRAM |
 | HD, iGPU | 747 | 596 (766 against pre) | about 1.3 to 1.5 GiB, all system RAM |
-| HD, S21 | 779 | 1533 | about 2.3 GiB |
+| HD, S21 | 780 | 1533 | about 2.3 GiB |
 
 - **Heap** is live heap on desktop and native heap alloc on the phone. Do not use
   `VmRSS` (b) minus (d): it reads 113 on HD and -59 on Pulse, because the race
@@ -248,128 +248,55 @@ texture upload cache is per `Scene::new`).
 a first race load even with the finished race dropped. With the race held, an
 upper estimate is today's peak plus the held race: about 2600 MiB of `VmRSS` on
 desktop (1850 + 750), and about 5300 to 5700 MiB on the S21 (`VmHWM` 3250 to 3363
-plus 2020 to 2312), on a phone with 7200 MiB in total that had 3000 to 3600
+plus 2020 to 2313), on a phone with 7200 MiB in total that had 3000 to 3600
 available with the game not running. Pulse is not a concern on any of these. **Steam Deck not
 measured**; the iGPU row is the nearest proxy (shared system RAM). 2048, a desktop
 release build and the VRAM ceiling were not measured.
 
 ### Reproducing it
 
-The walk script comes from this generator (`mkwalk.sh pulse > walk.drive`):
+The samplers are in `scripts/memwalk/`. Each run takes a new, empty directory
+`<out>`; `tables.py` takes the runs of one cell and prints medians, ranges and the
+(b) minus (d) estimate.
 
 ```sh
-#!/usr/bin/env bash
-# mkwalk.sh pulse|hd  > walk.drive
-hold() { for _ in $(seq "$1"); do printf 'key; ticks 1000\n'; done; }
-case $1 in
-  pulse) finish="ticks 2800; until endrace=photo within 1500
-ticks 100; press cross; ticks 100; press cross; ticks 100"; end=8000; watch="press down down down" ;;
-  hd) finish="ticks 2800; until endrace=other within 600
-ticks 100; press cross; ticks 100"; end=7700; watch="press down down" ;;
-esac
-cat <<WALK
-boot; select racebox; press cross; until page=race
-set race.mode=time_trial
-$(hold 250)
-select launch_race; press cross; until screen=picker; press cross
-until screen.id=ship-select; press cross; until stage=race within 4000
-ticks 2800; until sim_tick=3000 within 600; screenshot SHOTS/a.png; until sim_tick=3600 within 700
-$finish
-screenshot SHOTS/b.png; until sim_tick=$end within 1500
-$watch; press cross; until replay=playing within 4000
-ticks 2800; until sim_tick=3000 within 600; screenshot SHOTS/c.png; until sim_tick=3600 within 700
-escape; until page=replays within 400; ticks 30; press circle; until page=main within 100
-ticks 60; screenshot SHOTS/d.png
-$(hold 700)
-quit
-WALK
+cargo build -p oag-game --bin oag-game      # target/debug, what the desktop rows are
+python3 scripts/memwalk/desktop.py pulse <out>/1 --gpu 1002:747e   # 1002:164e is the iGPU
+python3 scripts/memwalk/desktop.py hd <out-hd>/1 --gpu 1002:747e
+just deploy android --serial <serial>
+python3 scripts/memwalk/adb.py pulse <out-phone>/1 --serial <serial>
+python3 scripts/memwalk/tables.py <out>/1 <out>/2 <out>/3
 ```
 
-SHA-256 of the output, before `SHOTS` is replaced by a directory:
-`pulse` `c0b69394eb8ac1032f98cf657bafdecc227cc43f24442a4227d064d321be3e05`,
-`hd` `69ddcd222099875b836e63ecd4acea02052c0254ab26a80b47676d72e2e2c030`.
-
-- **Why it is shaped so.** `ticks` runs unthrottled and `until` runs one tick per
-  16.7 ms, so each measured point is held by an `until` on `sim_tick`. A menu has
-  no tick to wait on, and a long `ticks` there starts the attract demo, hence
-  `key; ticks 1000`.
-- **Desktop.** A profile of its own (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
-  `XDG_STATE_HOME`), `OAG_MODS` and `OAG_TRACKS` on empty directories, no
-  `DISPLAY` or `WAYLAND_DISPLAY`, `MESA_VK_DEVICE_SELECT=1002:747e!` (7800 XT) or
-  `1002:164e!` (iGPU):
-
-  ```sh
-  oag-game <image> --no-audio --no-soundtrack --no-intro --seed 7 --autopilot \
-    --drive "$(cat walk.drive)" --state-log state.jsonl
-  ```
-
-- **Phone.** Move `files/config` and `files/data/oag/replays` aside first and put
-  them back after (the walk writes settings, records and a replay). Push the walk,
-  write the [launch file](../tools/android.md), one entry a line, with `F` the
-  app's files directory, then `am force-stop` and `am start`: `<image path>`,
-  `--no-audio`, `--no-soundtrack`, `--no-intro`, `--autopilot`, `--drive-file`,
-  `F/walk.drive`, `--state-log`, `F/walk-state.jsonl`, `OAG_MODS=F/walk-empty`,
-  `OAG_TRACKS=F/walk-empty`. The `dist` build has no `--seed`, so the phone flies
-  a different race (finish at sim tick 6833 against 6786 on Pulse). The headless
-  walk drew no ANR.
-- **Sampling.** Read the state log's last line together with the memory, every
-  20 ms on desktop, back to back over adb on the phone (`/proc/<pid>/status`,
-  `dumpsys meminfo <pid>`, `dumpsys gpu --gpumem`; keep a phone sample only if the
-  window is the same before and after the call). Window rules: **pre** `stage=menu
-  page=race` before the first (a); **a** `stage=race`, no `replay`, no `endrace`,
-  `sim_tick` 3000 to 3600; **b** `stage=race`, `endrace=other`, `sim_tick` within
-  700 below the walk's `end`; **c** `replay=playing`, `sim_tick` 3000 to 3600;
-  **d** `stage=menu page=main` after (c).
-- **Heap.** `LD_PRELOAD` the shim below, with `MALLSHIM_OUT=mallinfo.jsonl`:
-  `SIGUSR1` one second into each window, `SIGUSR2` (trim) 2.5 s into (d), with
-  **d trim** read from 3.5 s on. It is the shim "A second race in one session",
-  "Reproducing it" describes:
-
-  ```c
-  // gcc -O2 -shared -fPIC -o mallshim.so mallshim.c -lpthread
-  #define _GNU_SOURCE
-  #include <malloc.h>
-  #include <pthread.h>
-  #include <signal.h>
-  #include <stdio.h>
-  #include <stdlib.h>
-
-  static void *serve(void *arg) {
-      sigset_t set;
-      sigemptyset(&set);
-      sigaddset(&set, SIGUSR1);
-      sigaddset(&set, SIGUSR2);
-      const char *out = getenv("MALLSHIM_OUT");
-      unsigned long n = 0;
-      for (;;) {
-          int sig = 0;
-          if (sigwait(&set, &sig) != 0) continue;
-          if (sig == SIGUSR2) malloc_trim(0);
-          struct mallinfo2 m = mallinfo2();
-          FILE *f = fopen(out, "a");
-          if (!f) continue;
-          fprintf(f, "{\"n\":%lu,\"trim\":%d,\"arena\":%zu,\"hblkhd\":%zu,\"uordblks\":%zu,\"fordblks\":%zu}\n",
-                  ++n, sig == SIGUSR2, m.arena, m.hblkhd, m.uordblks, m.fordblks);
-          fclose(f);
-      }
-      return arg;
-  }
-
-  __attribute__((constructor)) static void start(void) {
-      if (!getenv("MALLSHIM_OUT")) return;
-      sigset_t set;
-      sigemptyset(&set);
-      sigaddset(&set, SIGUSR1);
-      sigaddset(&set, SIGUSR2);
-      pthread_sigmask(SIG_BLOCK, &set, NULL);
-      pthread_t t;
-      pthread_create(&t, NULL, serve, NULL);
-      pthread_detach(t);
-  }
-  ```
+- **The walk** is `scripts/memwalk/walk.sh pulse|hd`; both samplers run it. SHA-256
+  of its output for the numbers above:
+  `pulse` `c0b69394eb8ac1032f98cf657bafdecc227cc43f24442a4227d064d321be3e05`,
+  `hd` `69ddcd222099875b836e63ecd4acea02052c0254ab26a80b47676d72e2e2c030`.
+  `ticks` runs unthrottled and `until` runs one tick per 16.7 ms, so each point is
+  held by an `until` on `sim_tick`. A menu has no tick to wait on, and a long
+  `ticks` there starts the attract demo, hence `key; ticks 1000`.
+- **The points** (which state line is which) are `points.window`.
+- **Desktop** (`desktop.py`) runs the walk with `--seed 7` on a profile under
+  `<out>`, with `OAG_MODS` and `OAG_TRACKS` empty, and builds and preloads
+  `mallshim.c` for the live heap: one `mallinfo2` reading per point (the shim of
+  "A second race in one session", "Reproducing it") and a `malloc_trim` in (d).
+- **Phone** (`adb.py`) writes the [launch file](../tools/android.md) for the
+  installed app, which must not be running. The walk writes settings, records and a
+  replay, so the script renames `files/config` and `files/data/oag/replays` to
+  `*.keep` and renames them back. The `dist` build has no `--seed`, so the phone
+  flies a different race (finish at sim tick 6833 against 6786 on Pulse). The
+  headless walk drew no ANR.
+- **Checked through these scripts**, one run each: held-race live heap 748 (HD) and
+  83 (Pulse) on the RX 7800 XT, and 93 heap plus 235 GPU for Pulse on the S21,
+  with the phone's profile byte-identical afterwards.
+- **The full-field figures**: the walk with `race.mode=single_race`, cut after its
+  (a) line (the one ending `until sim_tick=3600 within 700`) with `quit` appended,
+  passed as `--walk <file>`.
 
 **After step 4 the walk's tail changes, and this tail has not been run.** EXIT pops
-back to the end menu, so replace the `escape; until page=replays ...` line with:
+back to the end menu. Write `walk.sh`'s output to a file, replace the
+`escape; until page=replays ...` line with the lines below, and pass it as
+`--walk <file>`:
 
 ```text
 escape; until endrace=other within 400
@@ -377,12 +304,13 @@ ticks 100; screenshot SHOTS/e.png; until sim_tick=<end + 700> within 1500
 press up up up; press cross; until page=main within 400
 ```
 
-(`up up` on HD). Add a window **e**: `endrace=other`, no `replay`, after (c); it
-should read like (b). Where focus lands after the pop is unknown, so read `e.png`
-and adjust the `up` presses until the cursor is on RETURN TO MENUS. That row
-lands on `page=main` today (checked on both titles, one run each, RX 7800 XT), so
-the (d) rule holds as written. The rest of the walk, from `ticks 60; screenshot
-SHOTS/d.png` on, is unchanged.
+(`<end>` is the walk's own end-menu tick, 8000 or 7700; `up up` on HD.)
+`points.window` already labels the popped end menu **e**; it should read like (b).
+Where focus lands after the pop is unknown, so read `e.png` and adjust the `up`
+presses until the cursor is on RETURN TO MENUS. That row lands on `page=main`
+today (checked on both titles, one run each, RX 7800 XT), so the (d) rule holds as
+written. The rest of the walk, from `ticks 60; screenshot SHOTS/d.png` on, is
+unchanged.
 
 ## Open
 
@@ -398,8 +326,9 @@ SHOTS/d.png` on, is unchanged.
   (`Session::open_menus`), not through `drop_off_thread`; the next build's trim
   covers its memory. Measured on the way out of the replay viewer: HD sits at
   about 1005 MiB resident in the menus there, against 359 after `malloc_trim(0)`.
-- After numbers owed by ADR-0099 step 4: re-run the walks under "A finished race
-  held under its replay" with the race held, desktop and S21, HD first.
+- After numbers owed by ADR-0099 step 4: re-run `scripts/memwalk/` with the race
+  held (the tail under "A finished race held under its replay"), desktop and S21,
+  HD first.
 - Step 5's fallback (drop the held GPU scene) leaves HD's roughly 750 MiB of
   heap; `graphics.texture_compression=astc` on the phone is the other lever for
   the GPU half. Neither is measured (ASTC needs two races on a circuit, since the
