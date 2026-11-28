@@ -80,6 +80,9 @@ names do not matter; the game reads the ID out of the file.
 | Wipeout 2048 (Vita) | a `.vpk` (a Vita `.pkg` is not read yet) |
 | Omega Collection (PS4) | the base `.pkg` **and** its update `.pkg`, in the same folder |
 
+How to get each of these from a copy you own:
+[`docs/tools/your-own-images.md`](docs/tools/your-own-images.md).
+
 Check what was found without opening a window:
 `oag-game --dry-run --no-audio --no-video`. Linux is the only system the program
 has run on natively. Windows was run under Wine, and Mac and iOS have never run on
