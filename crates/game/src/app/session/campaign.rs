@@ -8,6 +8,7 @@ use log::warn;
 use oag_ui_screens::campaign::Event;
 
 use crate::app::campaign_stage::{CampaignStage, Screen};
+use crate::app::run_context::CampaignHome;
 use crate::app::stage::Stage;
 
 use super::Session;
@@ -226,8 +227,15 @@ impl Session {
 
     /// Puts back what a mod campaign event replaced in the race options (the
     /// sources a cross-disc event swapped, the AI level); a no-op when none did.
+    ///
+    /// The home is the run's: the one being launched, else the race on screen's.
     pub(crate) fn restore_campaign_home(&mut self) {
-        if let Some(home) = self.campaign_home.take()
+        let run = match (&mut self.run, &mut self.stage) {
+            (Some(run), _) if run.campaign_home.is_some() => Some(run),
+            (_, Stage::Race(stage)) => Some(&mut stage.run),
+            _ => None,
+        };
+        if let Some(home) = run.and_then(|run| run.campaign_home.take())
             && let Some(options) = self.race_options.as_mut()
         {
             options.source = home.source;
@@ -503,7 +511,7 @@ impl Session {
     /// campaign event launches": the cell's own track/mode/class/laps/kill
     /// target replace whatever the RACE page had selected, `Team Selection`
     /// (`Self::open_ship_picker`) follows because every authored cell
-    /// carries `ShipChoice="Yes"`, and `self.campaign_cell` carries the cell
+    /// carries `ShipChoice="Yes"`, and the run's campaign cell carries the cell
     /// itself through to `RaceStage::observation` for the medal.
     /// `difficulty` rides alongside it the same way, `None` on every cell
     /// with no rung to be run at - see the caller's own doc for when that
@@ -618,9 +626,10 @@ impl Session {
         race_options.weapons_override = None;
         race_options.grid_teams = Vec::new();
         let preset_team = extras.as_ref().and_then(|e| e.team.clone());
+        let mut home = None;
         if let Some(extras) = &extras {
             // What the event replaces, put back when the menus return.
-            self.campaign_home = Some(super::CampaignHome {
+            home = Some(CampaignHome {
                 source: race_options.source.clone(),
                 craft_source: race_options.craft_source.clone(),
                 difficulty: race_options.difficulty,
@@ -687,8 +696,14 @@ impl Session {
                 )
             });
         self.race_options = Some(race_options);
-        self.campaign_cell = Some(cell);
-        self.campaign_custom =
+        // A fresh run: whatever an abandoned launch left is dropped, the add-on a 2048 tier
+        // launch set kept.
+        let add_on = self.run.take().and_then(|run| run.campaign_add_on);
+        let run = self.run_mut();
+        run.campaign_add_on = add_on;
+        run.campaign_home = home;
+        run.campaign_cell = Some(cell);
+        run.campaign_custom =
             custom
                 .zip(extras)
                 .map(|((records_title, tiers, words, event), extras)| {
@@ -702,13 +717,9 @@ impl Session {
                         pilot: extras.pilot,
                     }
                 });
-        self.campaign_difficulty = difficulty;
-        self.campaign_ai_skill_scale = ai_skill_scale;
-        // `None` for every ordinary cell, clearing whatever a previous
-        // tournament (finished or abandoned) left behind - see
-        // `Self::tournament`'s own doc for why nothing else has to clear it
-        // on this path.
-        self.tournament =
+        run.campaign_difficulty = difficulty;
+        run.campaign_ai_skill_scale = ai_skill_scale;
+        run.tournament =
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.pure_chain = None;
@@ -719,7 +730,10 @@ impl Session {
         // A title whose own chain has no team step in Zone launches without the screen, as the
         // RACE page's own launch does (`Session::handle_picker`). So does a campaign that flies
         // its own craft: the screen lists the native roster, which that craft is not on.
-        let skipped = self.campaign_add_on.is_some()
+        let skipped = self
+            .run
+            .as_ref()
+            .is_some_and(|run| run.campaign_add_on.is_some())
             || self
                 .shell
                 .as_ref()
@@ -746,7 +760,7 @@ impl Session {
             self.apply_race_team(&mut race_options);
             // A downloadable campaign flies its own roster's craft: the team
             // the player picked is a native one, which is not on it.
-            if let Some(add_on) = self.campaign_add_on.take() {
+            if let Some(add_on) = self.run.as_mut().and_then(|run| run.campaign_add_on.take()) {
                 race_options.team = Some(add_on.default_team.to_string());
                 race_options.add_on_campaign = Some(add_on.campaign.to_string());
                 race_options.hull_variant = None;

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-11-27). Editable until merged to `main`; nothing built.
+Accepted (2026-11-28).
 
 ## Context
 

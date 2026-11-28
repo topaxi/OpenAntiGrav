@@ -324,8 +324,10 @@ impl Session {
         if self.shell.is_some()
             && let Stage::Race(stage) = &self.stage
             && !self.pause_screen_applies(stage)
-            && let RaceExit::CellSelection { cell, difficulty } =
-                race_exit(stage.campaign_cell.as_ref(), stage.campaign_difficulty)
+            && let RaceExit::CellSelection { cell, difficulty } = race_exit(
+                stage.run.campaign_cell.as_ref(),
+                stage.run.campaign_difficulty,
+            )
         {
             self.quit_campaign_race(&cell, difficulty);
             return;
@@ -385,8 +387,8 @@ impl Session {
             stage.result_saved = true;
             let key = stage.result_key.clone();
             let observation = stage.observation();
-            if let Some(cell) = stage.campaign_cell.as_ref() {
-                match stage.campaign_custom.as_ref() {
+            if let Some(cell) = stage.run.campaign_cell.as_ref() {
+                match stage.run.campaign_custom.as_ref() {
                     Some(launch) => launch.record_result(
                         &mut self.records,
                         &cell.name,
@@ -413,7 +415,7 @@ impl Session {
             let observation = records::Observation {
                 campaign_medal: observation
                     .campaign_medal
-                    .filter(|_| stage.campaign_custom.is_none()),
+                    .filter(|_| stage.run.campaign_custom.is_none()),
                 ..observation
             };
             self.records.record(key, observation);

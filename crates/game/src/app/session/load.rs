@@ -485,10 +485,21 @@ impl Session {
         if let Some(parked) = self.suspended_race.take() {
             crate::app::race_build::drop_off_thread(parked);
         }
-        let mut options = self
-            .race_options
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        // The run's own options on a relaunch, a demo or a benchmark; else the menus' options,
+        // snapshotted into the run as the launch saw them (ADR-0099).
+        let run = self.run.get_or_insert_default();
+        let mut options = match &run.options {
+            Some(options) => options.clone(),
+            None => {
+                let menus = self
+                    .race_options
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+                run.options = Some(menus.clone());
+                menus
+            }
+        };
+        let run = &*run;
         // A fresh seed per race; `--seed` (already in the options) and a network race's server
         // seed (`NetPlay::race_options`, below) replace it.
         options.seed = Some(crate::race_seed::for_launch(options.seed));
@@ -496,11 +507,14 @@ impl Session {
         // driver's pack shuffle does (`advance_race_build`); any other launch takes `[ai]
         // difficulty`.
         options.skill_level = campaign_skill_level(
-            self.campaign_cell.is_some(),
-            self.campaign_custom
-                .as_ref()
-                .and_then(|launch| launch.level),
-            self.campaign_difficulty,
+            run.campaign_cell.is_some(),
+            run.campaign_custom.as_ref().and_then(|launch| launch.level),
+            run.campaign_difficulty,
+        );
+        let (campaign, vanilla_campaign) = (
+            run.campaign_cell.is_some() || run.pending_event.is_some(),
+            (run.campaign_cell.is_some() && run.campaign_custom.is_none())
+                || run.pending_event.is_some(),
         );
         let options_mode = options.mode;
         let options_track = options.foreign_track.clone();
@@ -575,12 +589,10 @@ impl Session {
         // (manifests and `.wasm` alike, off this thread) so a MODS page switch counts.
         // None in an original campaign's race (README 1.2; a mod campaign's runs them) or
         // a network race (the host's race runs vanilla).
-        options.campaign = self.campaign_cell.is_some() || self.pending_event.is_some();
+        options.campaign = campaign;
         #[cfg(feature = "extensions")]
         {
-            let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
-                || self.pending_event.is_some()
-                || self.net.is_some();
+            let vanilla = vanilla_campaign || self.net.is_some();
             crate::mod_extensions::attach(
                 &mut options,
                 &self.settings.mods,
@@ -624,7 +636,11 @@ impl Session {
             options = net.race_options(options)?;
             // Only the circuit goes back (the build request reads it): the server's seed and
             // grid must not leak into the next local race's options.
-            if let Some(stored) = self.race_options.as_mut() {
+            let run_options = self.run.as_mut().and_then(|run| run.options.as_mut());
+            for stored in [self.race_options.as_mut(), run_options]
+                .into_iter()
+                .flatten()
+            {
                 stored.track.clone_from(&options.track);
             }
         }
@@ -695,8 +711,10 @@ impl Session {
         // build, when `plan_ahead` (nothing will change who flies which craft: not a
         // network host's race, not split seating): `SimRace::begin_speed_plans` at the
         // hand-over keeps the job when the race still fits it.
-        let card = self.pending_card.take();
-        let worker = match self.pending_event.take() {
+        let (card, event) = self.run.as_mut().map_or((None, None), |run| {
+            (run.pending_card.take(), run.pending_event.take())
+        });
+        let worker = match event {
             Some(event) => race::LoadWorker::spawn_event(options, event, label, sink, plan_ahead),
             None => race::LoadWorker::spawn(options, label, sink, plan_ahead),
         };
@@ -815,13 +833,10 @@ impl Session {
                         allocation,
                     );
                 }
-                // Drained here, not read: this is the one place a launch that
-                // set `self.campaign_cell` (`Session::launch_campaign_cell`)
-                // and a stage that is actually about to become live meet - see
-                // `RaceStage::campaign_cell`'s own doc. `.take()` leaves
-                // `self.campaign_cell` empty for whatever races next.
-                race_stage.campaign_cell = self.campaign_cell.take();
-                race_stage.campaign_custom = self.campaign_custom.take();
+                // Moved here, not copied: this is the one place a launch's run and a stage that
+                // is about to become live meet (`RaceStage::run`). It leaves `self.run` empty
+                // for whatever races next.
+                race_stage.run = self.run.take().unwrap_or_default();
                 // The benchmark: its race, timed. Nothing it does is a result or a ghost.
                 if let Some(live) = self.benchmark.take_launch() {
                     race_stage.benchmark = Some(Box::new(live));
@@ -917,10 +932,8 @@ impl Session {
                             &self.pane_people,
                         );
                     }
-                    race_stage.campaign_difficulty = self.campaign_difficulty.take();
-                    race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
                     // Applied here, once, before the stage ever ticks - see
-                    // `Session::campaign_ai_skill_scale`'s own doc.
+                    // `RunContext::campaign_ai_skill_scale`'s own doc.
                     // `oag_ai::Difficulty::tune_at_scale` is the continuous
                     // generalisation of `SimSetup::difficulty`'s own discrete
                     // `tune()`, which `race::Race::start` already ran once with
@@ -931,7 +944,7 @@ impl Session {
                     // branch has.
                     // The finished player's thrust reads the same scale:
                     // `AI_ResolveSkillScale` is its one source too.
-                    if let Some(scale) = race_stage.campaign_ai_skill_scale {
+                    if let Some(scale) = race_stage.run.campaign_ai_skill_scale {
                         race_stage.race.core.sim.apply_campaign_skill(scale);
                     }
                     // **Whose driver flies the opponents** (`crate::ai_choice`):
@@ -946,13 +959,13 @@ impl Session {
                     // with no tables keeps this project's driver.
                     // A mod campaign event's own AI (ADR-0077): its pilot for
                     // every opponent, and whose driver flies.
-                    let custom = race_stage.campaign_custom.clone();
+                    let custom = race_stage.run.campaign_custom.clone();
                     // The rung the load took for the shield pools, recorded so a rebuild
                     // repeats it.
                     let shield_rung = campaign_skill_level(
-                        race_stage.campaign_cell.is_some(),
+                        race_stage.run.campaign_cell.is_some(),
                         custom.as_ref().and_then(|c| c.level),
-                        race_stage.campaign_difficulty,
+                        race_stage.run.campaign_difficulty,
                     );
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
                         race_stage
@@ -965,12 +978,12 @@ impl Session {
                         && custom.ai == crate::campaign::custom::Ai::Ours
                     {
                         None
-                    } else if race_stage.campaign_cell.is_some() {
+                    } else if race_stage.run.campaign_cell.is_some() {
                         Some(crate::ai_choice::Source::Campaign {
-                            skill: race_stage.campaign_ai_skill_scale,
+                            skill: race_stage.run.campaign_ai_skill_scale,
                             level: campaign_level(
                                 custom.as_ref().and_then(|c| c.level),
-                                race_stage.campaign_difficulty,
+                                race_stage.run.campaign_difficulty,
                             ),
                         })
                     } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
@@ -1060,12 +1073,13 @@ impl Session {
                     autopilot: self.autopilot,
                     autopilot_pilot: self.autopilot_pilot,
                     autopilot_skill: self.autopilot_skill,
-                    // The same options this load itself was started from -
-                    // see `Session::launch_race`, which clones this field into
-                    // the worker rather than taking it.
+                    // The same options this load itself was started from: the run's, which
+                    // `Session::launch_race` snapshotted, else the menus' (a watched recording).
                     track_entry: self
-                        .race_options
+                        .run
                         .as_ref()
+                        .and_then(|run| run.options.as_ref())
+                        .or(self.race_options.as_ref())
                         .and_then(|options| options.track.clone()),
                     pvs_culling,
                     anim_seconds: self.anim_seconds,
@@ -1160,17 +1174,19 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
-                // A Tournament leg that would not load ends the tournament: the leg's launch
-                // facts went with the loading stage, and standings left behind would offer
-                // NEXT RACE after the next unrelated race (`docs/architecture/navigation-map.md`,
-                // "A leg that will not load").
-                self.abandon_tournament();
-                // A benchmark that would not load gives the player's own options back.
+                // The run ends with its load: a relaunch has nothing to continue from, and its
+                // snapshotted options must not stand in for the next launch's. A Tournament
+                // leg's standings go with it, which would otherwise offer NEXT RACE after the
+                // next unrelated race (`docs/architecture/navigation-map.md`, "A leg that will
+                // not load"). What a mod campaign event replaced in the menus' options goes
+                // back first.
+                self.end_run();
+                // A benchmark that would not load gives the player's own run back.
                 self.abandon_benchmark_launch();
                 // A demo that would not load ends a `--demo` chain rather than retrying it.
                 if self.demo.loading.take().is_some() {
                     self.demo.cli = None;
-                    self.restore_race_options();
+                    self.restore_player_run();
                 }
                 // A recording that would not load is listed dimmed with why.
                 if self.shot_pending {

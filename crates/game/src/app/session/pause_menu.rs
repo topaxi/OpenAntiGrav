@@ -17,7 +17,7 @@ use super::Session;
 /// The key a race's pause screen is chosen by: its mode's name, or `free_play` for a Free Play
 /// event (Pure's, which this build races as a single race, `docs/formats/pure-campaign.md`).
 fn pause_mode(stage: &RaceStage) -> &str {
-    match &stage.campaign_cell {
+    match &stage.run.campaign_cell {
         Some(cell) if oag_tables::pure_campaign::is_free_play(&cell.name) => "free_play",
         _ => stage.race.core.sim.world.mode().name(),
     }
@@ -210,17 +210,7 @@ impl Session {
         let Some(stage) = self.suspended_race.as_ref() else {
             return;
         };
-        (
-            self.campaign_cell,
-            self.campaign_difficulty,
-            self.campaign_ai_skill_scale,
-            self.campaign_custom,
-        ) = (
-            stage.campaign_cell.clone(),
-            stage.campaign_difficulty,
-            stage.campaign_ai_skill_scale,
-            stage.campaign_custom.clone(),
-        );
+        self.run = Some(stage.run.clone());
         info!("restarting the race from the pause menu");
         self.finish_launch();
     }
@@ -231,8 +221,10 @@ impl Session {
         let Some(parked) = self.suspended_race.take() else {
             return;
         };
-        let exit =
-            super::escape::race_exit(parked.campaign_cell.as_ref(), parked.campaign_difficulty);
+        let exit = super::escape::race_exit(
+            parked.run.campaign_cell.as_ref(),
+            parked.run.campaign_difficulty,
+        );
         crate::app::race_build::drop_off_thread(parked);
         match exit {
             super::escape::RaceExit::CellSelection { cell, difficulty } => {

@@ -80,7 +80,7 @@
 //! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
 //! [`Observation::campaign_medal`] is what feeds both: [`RaceStage::observation`]
 //! (`crates/game/src/app/race_stage.rs`) evaluates it once a race carries a
-//! [`RaceStage::campaign_cell`], and [`Store::record`] folds it into the
+//! campaign cell on its run (`RunContext::campaign_cell`), and [`Store::record`] folds it into the
 //! ordinary `[[records]]` row the way every other field is.
 //!
 //! **A second, cell-keyed table carries the same medal for a different
@@ -241,11 +241,11 @@ pub struct Observation {
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
     /// `None` for a race launched any other way (the ordinary RACE page,
-    /// a two-title race page, `--race`), since none of those set `RaceStage::campaign_cell`
+    /// a two-title race page, `--race`), since none of those set a campaign cell on the race's run
     /// at all. See the module doc's "where a career system attaches" section.
     pub campaign_medal: Option<Medal>,
     /// **Wipeout HD/Fury only.** The rung [`Self::campaign_medal`] was
-    /// evaluated against - `RaceStage::campaign_difficulty`'s own doc names
+    /// evaluated against - `RunContext::campaign_difficulty`'s own doc names
     /// when this is `None` even with a campaign cell in play. Independent
     /// of whether [`Self::campaign_medal`] itself is `Some`: a run that
     /// scored no tier still ran at a real difficulty, and

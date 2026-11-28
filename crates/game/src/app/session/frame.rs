@@ -1173,7 +1173,7 @@ impl Session {
                 // See `super::tournament::record_finished_leg`'s own doc
                 // for why this is a plain function taking `stage` rather
                 // than a `Session` method.
-                super::tournament::record_finished_leg(&mut self.tournament, stage);
+                super::tournament::record_finished_leg(stage);
                 let observation = stage.observation();
                 // Read before `self.records.record` below folds `observation`
                 // into the row: `PersonalBest::compare` wants the row as it
@@ -1192,12 +1192,13 @@ impl Session {
                 // A Free Play race has a cell to launch through and no medal to
                 // keep (`oag_tables::pure_campaign::free_play_event`).
                 if let Some(cell) = stage
+                    .run
                     .campaign_cell
                     .as_ref()
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
                     .filter(|_| !unofficial)
                 {
-                    match stage.campaign_custom.as_ref() {
+                    match stage.run.campaign_custom.as_ref() {
                         Some(launch) => launch.record_result(
                             &mut self.records,
                             &cell.name,
@@ -1247,8 +1248,8 @@ impl Session {
                 // A title whose EndRace screens do not bank the award (Pure, 2048
                 // and Omega read none of Pulse's or HD's) is paid here, under the
                 // law its `Title::loyalty` names.
-                if let (Some(shell), Some(options)) =
-                    (self.shell.as_ref(), self.race_options.as_ref())
+                let options = stage.run.options.as_ref().or(self.race_options.as_ref());
+                if let (Some(shell), Some(options)) = (self.shell.as_ref(), options)
                     && !unofficial
                     && let Some(earning) = shell.title.loyalty.filter(|e| !e.banked_by_endrace)
                     && let Some(team) = options.team.as_deref()
@@ -1260,7 +1261,7 @@ impl Session {
                             laps: observation.laps_completed,
                             kills: stage.race.core.sim.world.ships[0].standing.kills,
                             zones: u32::from(stage.race.core.sim.world.primary_race().zone),
-                            difficulty: stage.campaign_difficulty,
+                            difficulty: stage.run.campaign_difficulty,
                         },
                     );
                     let total = self.records.record_loyalty(shell.title, team, award);
@@ -1270,7 +1271,7 @@ impl Session {
                 let observation = records::Observation {
                     campaign_medal: observation
                         .campaign_medal
-                        .filter(|_| stage.campaign_custom.is_none()),
+                        .filter(|_| stage.run.campaign_custom.is_none()),
                     ..observation
                 };
                 if !unofficial {

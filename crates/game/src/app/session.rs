@@ -463,7 +463,8 @@ pub(crate) struct Session {
     ///
     /// `None` only while the chooser is on screen: it names a `source`, and
     /// which source is precisely what has not been decided yet. See
-    /// [`Session::finish_launcher`].
+    /// [`Session::finish_launcher`]. The menus' own copy: a launch snapshots it into its run
+    /// (`RunContext::options`), and a relaunch, a demo or a benchmark reads that instead.
     pub(crate) race_options: Option<race::Options>,
     /// The track the command line named (`--ballisticng-track`/`--track-file`), which
     /// every launch that does not pick its own sets on `race_options`; a CUSTOM
@@ -534,13 +535,6 @@ pub(crate) struct Session {
     pub(crate) ffmpeg: ffmpeg::State,
     /// Whether the phone's soft keyboard is up (`soft_keyboard`).
     pub(crate) soft_keyboard: bool,
-    /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
-    /// starts, by its `SP.xml` name - set by the front end's own
-    /// `Launch 2048` and taken by that one launch. `None` is an ordinary
-    /// race from the menus' own options. See `oag_raceplay::load_event`.
-    pub(crate) pending_event: Option<String>,
-    /// The card that event was launched from, which the race load draws behind its box.
-    pub(crate) pending_card: Option<oag_ui::frontend::LaunchedCard>,
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,
@@ -742,32 +736,15 @@ pub(crate) struct Session {
     /// all - see [`Self::open_menus`], which is the only place that fills it,
     /// and only when the outgoing race had not finished.
     pub(crate) suspended_race: Option<Box<RaceStage>>,
-    /// The campaign cell a launch in progress is racing, from the moment
-    /// `Cell Selection`'s own confirm is handled
-    /// ([`Session::launch_campaign_cell`]) to the moment the race stage is
-    /// actually built, which drains it via [`Option::take`] into
-    /// [`RaceStage::campaign_cell`] - see `crate::app::session::load`'s
-    /// `finish_loading`. The mirror of `DAT_08b30ffc`,
-    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "current
-    /// campaign cell" - not carried through `race::Options`/`race::Setup`
-    /// because nothing in `oag_race`/`oag_gameplay` may know a campaign
-    /// exists, only the composition root.
-    ///
-    /// `None` on every path but a campaign launch: an ordinary RACE-page or
-    /// keyed launch clears it defensively (`Session::launch_from_settings`,
-    /// `Session::launch_keyed`) so a cell abandoned by backing out of `Team
-    /// Selection` cannot leak into the next unrelated race.
-    pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
-    /// A mod campaign event's extras for the race [`Self::campaign_cell`]
-    /// launches (ADR-0077), drained beside it; `None` for the disc's own.
-    pub(crate) campaign_custom: Option<crate::campaign::custom::Launch>,
+    /// The run being launched (ADR-0099): its campaign slots, a 2048 event, and once
+    /// `Session::launch_race` has run, the options it launched with. The race build moves it
+    /// into the `RaceStage`, so it is `None` while a race is on screen unless a relaunch is
+    /// starting. A RACE-page or keyed launch drops whatever an abandoned launch left here.
+    pub(crate) run: Option<crate::app::run_context::RunContext>,
     /// The mod campaign the campaign screens show, by
     /// `crate::campaign::custom::Custom::key`; `None` is the disc's own. Kept
     /// across a race so RETURN TO GRID reopens the same campaign.
     pub(crate) custom_campaign: Option<String>,
-    /// What a mod campaign event replaced in the race options, put back when
-    /// the menus return (`Session::open_menus`) or the next cell launches.
-    pub(crate) campaign_home: Option<CampaignHome>,
     /// Wipeout Pure's campaign list: the class it was left on, as an index into
     /// `PureClass::ALL`, so reopening it lands where the player was.
     pub(crate) pure_chain_class: usize,
@@ -865,45 +842,6 @@ pub(crate) struct Session {
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.
     pub(crate) pure_classic_entries: std::collections::BTreeMap<String, String>,
-    /// [`Self::campaign_cell`]'s own difficulty rung, draining into
-    /// [`RaceStage::campaign_difficulty`] the identical way and at the
-    /// identical moment - see [`Session::launch_campaign_cell`]'s own doc
-    /// for when this is `None` even with a cell in play.
-    pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
-    /// [`Self::campaign_cell`]'s own resolved AI skill scale - `AI_ResolveSkillScale`
-    /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`, `0x08834df4`)
-    /// against [`Self::campaign_difficulty`]'s own rung and the launched
-    /// track's `stats.xml` - draining into [`RaceStage::campaign_ai_skill_scale`]
-    /// the identical way [`Self::campaign_difficulty`] does, and applied to
-    /// the race's AI tuning there
-    /// (`crate::app::session::load::advance_race_build`). Computed once, in
-    /// [`Session::launch_campaign_cell`], rather than read again at drain
-    /// time - see that function's own `resolve_campaign_ai_skill_scale`.
-    /// `None` whenever [`Self::campaign_difficulty`] is, or the resolution
-    /// itself falls back (see that function's own doc for when).
-    pub(crate) campaign_ai_skill_scale: Option<f32>,
-    /// The downloadable campaign a cell belongs to: its craft ([`oag_title::AddOn::default_team`])
-    /// replaces the player's own pick and its HUD layouts ([`oag_title::AddOn::hud`]) replace the
-    /// title's. Set around [`Session::launch_campaign_cell`] by `launch_tier_cell`, taken by
-    /// [`Session::launch_campaign_race`]. `None` for every other launch.
-    pub(crate) campaign_add_on: Option<&'static oag_title::AddOn>,
-    /// A Tournament cell's own leg list and running standings, from the
-    /// moment `Session::launch_campaign_cell` starts one to the moment its
-    /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).
-    /// See `crate::app::session::tournament` and
-    /// `race::tournament::Progress`'s own doc.
-    ///
-    /// **Unlike [`Self::campaign_cell`], this survives across a leg's own
-    /// relaunch rather than draining into the race stage** - every mode
-    /// this engine ran before Tournament reset its state fresh per race,
-    /// because every one of them ended there; a tournament's own points
-    /// total is the first fact that has to outlive one. `None` outside a
-    /// Tournament cell, and cleared the moment its `EndRace Menu` is left by
-    /// any option, finished or abandoned, or a leg fails to load - this engine implements no
-    /// save/resume (`Tournament_SaveProgress`/`_LoadProgress`), so leaving
-    /// mid-tournament loses progress rather than parking it. **Chosen, not
-    /// measured.**
-    pub(crate) tournament: Option<race::tournament::Progress>,
     /// A CONTROLS binding row a player just confirmed, waiting for the key
     /// that will replace it.
     ///
@@ -959,14 +897,6 @@ pub(crate) struct BackdropShape {
 pub(crate) struct MenuRebuild {
     /// Whether the title's update is mounted: 2048's main menu grows two tiles with it.
     pub(crate) updated: bool,
-}
-
-/// The race options a mod campaign event replaces: a cross-disc event's
-/// sources, an event's AI level.
-pub(crate) struct CampaignHome {
-    pub(crate) source: String,
-    pub(crate) craft_source: Option<String>,
-    pub(crate) difficulty: oag_ai::Difficulty,
 }
 
 /// Everything the menus need, gathered where it is loaded.

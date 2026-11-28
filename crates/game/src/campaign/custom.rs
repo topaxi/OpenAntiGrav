@@ -426,7 +426,7 @@ pub fn mod_pilots(module: &oag_mod::Mod) -> (Pilots, Vec<(String, String)>) {
 pub const PILOTS: &str = "pilots";
 
 /// What a mod campaign event hands its race beyond the cell: drained into the
-/// race stage beside the cell, as `Session::campaign_cell` is.
+/// race stage beside the cell, on the run (`RunContext::campaign_custom`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Launch {
     /// See [`Custom::records_title`].

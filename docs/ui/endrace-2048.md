@@ -102,7 +102,7 @@ seen (**chosen**).
   to the campaign map; this build keeps no way back into the map once the race
   has launched, and rebuilding the front end mid-session is its own lane.
 - **Restart** hands the event's name back to the launcher
-  (`Session::pending_event`) and goes through `finish_launch`, as a tap on the
+  (the run's `pending_event`, `RunContext`) and goes through `finish_launch`, as a tap on the
   map did.
 
 ## Verification

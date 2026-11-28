@@ -36,6 +36,7 @@ mod race_build;
 mod race_stage;
 mod rebind;
 mod records_page;
+mod run_context;
 mod seat_assign_stage;
 mod session;
 mod soft_keyboard;

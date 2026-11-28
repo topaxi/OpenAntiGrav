@@ -647,8 +647,8 @@ fn state_of(session: &mut Session) -> State {
         );
     }
     state.tournament = session
-        .tournament
-        .as_ref()
+        .current_run()
+        .and_then(|run| run.tournament.as_ref())
         .map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
     state.demo = match &session.stage {
         Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),
@@ -661,7 +661,7 @@ fn state_of(session: &mut Session) -> State {
 
 /// The race the loader was handed; its `title` once it is loaded.
 fn resolved(session: &Session) -> Option<Resolved> {
-    let options = session.race_options.as_ref()?;
+    let options = session.race_options_now()?;
     let race = match &session.stage {
         Stage::Race(stage) => Some(&stage.race),
         _ => None,

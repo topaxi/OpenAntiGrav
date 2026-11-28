@@ -185,8 +185,13 @@ impl Session {
     /// the one path every launch uses. A race that was not an event (the RACE
     /// page, a mod's race page) relaunches on the options it ran with.
     fn restart_event(&mut self) {
-        if let Stage::Race(stage) = &self.stage {
-            self.pending_event = stage.campaign_2048_event.as_ref().map(|p| p.name.clone());
+        let event = match &self.stage {
+            Stage::Race(stage) => stage.campaign_2048_event.as_ref().map(|p| p.name.clone()),
+            _ => None,
+        };
+        self.rerun_race_on_screen();
+        if event.is_some() {
+            self.run_mut().pending_event = event;
         }
         self.finish_launch();
     }
