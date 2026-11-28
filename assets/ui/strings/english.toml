@@ -667,7 +667,7 @@ OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }
 
 # The BENCHMARK row and the graphics page's RUN BENCHMARK row. Ours, in no original.
 OAG_MENU_EXTRAS = { text = "EXTRAS", human = false }
-OAG_MENU_EXTRAS_SUBTITLE = { text = "What this project adds: the benchmark", human = false }
+OAG_MENU_EXTRAS_SUBTITLE = { text = "Extra tools and features", human = false }
 OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Fly one fixed race and read the frame rate, the lows and the frame times", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "RUN BENCHMARK", human = false }

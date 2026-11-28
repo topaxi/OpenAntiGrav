@@ -146,7 +146,7 @@ kind = "submenu"
 label = "EXTRAS"
 string_id = "OAG_MENU_EXTRAS"
 target = "extras"
-subtitle = "What this project adds: the benchmark"
+subtitle = "Extra tools and features"
 subtitle_string_id = "OAG_MENU_EXTRAS_SUBTITLE"
 
 [[page]]

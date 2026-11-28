@@ -422,7 +422,7 @@ OAG_PLAYER_TAG_TITLE = { text = "DIGITE SUA TAG", human = false }
 
 # The REPLAYS page and the replay viewer (ADR-0087).
 OAG_MENU_EXTRAS = { text = "EXTRAS", human = false }
-OAG_MENU_EXTRAS_SUBTITLE = { text = "O que este projeto acrescenta: o benchmark", human = false }
+OAG_MENU_EXTRAS_SUBTITLE = { text = "Ferramentas e recursos extras", human = false }
 OAG_MENU_BENCHMARK = { text = "BENCHMARK", human = false }
 OAG_MENU_BENCHMARK_SUBTITLE = { text = "Corra uma prova fixa e veja a taxa de quadros, as mínimas e os tempos de quadro", human = false }
 OAG_GRAPHICS_RUN_BENCHMARK = { text = "EXECUTAR BENCHMARK", human = false }
