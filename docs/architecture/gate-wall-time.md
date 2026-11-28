@@ -175,7 +175,9 @@ by user instructions of the whole module at the gate's profile:
 - The drive's `config` step switches `controls.menu_back` from any screen, so
   `campaign_cursor_ground_truth` (1,753 G -> 1,141 G, wall 60 to 70 s -> 42 s) and
   four `footer_hint_ground_truth` tests (671 G -> 545 G) launch once, not once
-  per choice.
+  per choice. The last per-choice launches followed on 2026-11-28 (the two modules'
+  user CPU 75.8 -> 69.4 s, summed test seconds 83.1 -> 77.3; `load-time.md`, same
+  section). No test loops a launch over MENU BACK any more.
 - Measured and not changed: the race build's pipeline compile (a disk pipeline
   cache adds about 1 % over mesa's own shader cache, which already takes a racing
   launch from 65.7 G to 24.0 G instructions, and naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.

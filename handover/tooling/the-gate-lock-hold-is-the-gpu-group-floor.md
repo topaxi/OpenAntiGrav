@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-24
-summary: "gpu-vram group is the gate hold floor; launch CPU is the lever (race launch -12 % from pruned pipelines); foliage and masked sets next"
+updated: 2026-11-28
+summary: "gpu-vram group is the gate hold floor; launch CPU is the lever (MENU BACK folding is used up); foliage and masked pipeline sets next"
 size: M (45)
 difficulty: medium (40)
 ---
@@ -51,6 +51,11 @@ threads).
   screen; `campaign_cursor_ground_truth` (14 tests) and four `footer_hint_ground_truth`
   tests launch once for the three choices: the modules' user instructions -35 % and
   -19 %.
+- No test loops a launch over MENU BACK any more (2026-11-28): the footer-hint Cell
+  Selection, photo-mode and Pure tests and the PS2 photo-and-viewer pair fold with
+  `config`; the two modules' user CPU 75.8 -> 69.4 s, summed test seconds 83.1 -> 77.3
+  (`docs/architecture/load-time.md`, "Third round"). About 6 s of the group: the
+  lever is now the launch itself, not the launch count of these modules.
 - A model builds only the blended twins, classes and stamp pairs its draws can pick (`mesh_render/reach.rs`): race launch 24.12 -> 21.13 G user instructions (-12.4 %), 158 -> 104 pipelines, `photo_mode_ground_truth` -9 %.
 - Measured and not changed: a disk pipeline cache adds about 1 % over mesa's own shader cache (`docs/architecture/load-time.md`, "Third round"), one shader
   module per stage gains 1.5 to 2 % of a race launch.
@@ -75,25 +80,19 @@ threads).
    and `perf report --no-inline --children --sort sym -g none`; the count is a
    counter at `pipeline_cache::cached_pipeline`'s miss and a set filled at each
    `set_pipeline`.
-2. **More MENU BACK launches to fold with `config`**: the cell-selection and
-   photo-mode tests of `footer_hint_ground_truth` and the photo/viewer tests of
-   `campaign_cursor_ground_truth` keep a launch per choice (a campaign cursor is
-   what their script reads; a photo test ends mid-race). Any other module that
-   loops a launch over one setting is the same shape: `rg 'for choice in'
-   crates/game/tests`.
-3. **The other archives' identify work** (`oag_sound::identify`, `menu_source`'s
+2. **The other archives' identify work** (`oag_sound::identify`, `menu_source`'s
    job, `launcher::examine`) still opens each archive's table once per process
    (45 archives, `match_paths_to_entries` 12 % of a menu launch after the
    shared parse) and the CHD handle of every disc in `data/images/`
    (`Chd::open`'s map CRC 11 %, the disc identify's LZMA hunks 16 %). A cache of
    the survey on disk, keyed by file identity, would remove them from every launch;
    it needs an invalidation story.
-4. **PS2 music decode under `--no-audio`** is 36 % of a PS2 launch (the CHD's LZMA
+3. **PS2 music decode under `--no-audio`** is 36 % of a PS2 launch (the CHD's LZMA
    hunks of `PS2MUSIC.WAD`, on `menu-music` and `race-music`). The null mixer keeps
    the song selection (the marquee) and advances a song by the `Sound`'s length, so
    skipping the read changes what is drawn unless a length-only `Sound` comes from
    the WAD's index: a decision for the audio owner, not a quiet change.
-5. A larger cap is the maintainer's call (8 GiB card, 0.5 to 1.05 GiB per
+4. A larger cap is the maintainer's call (8 GiB card, 0.5 to 1.05 GiB per
    game); measure the peak with the cap raised before proposing it.
 
 Measure with `just test-data-affected` on a branch that touches `oag-render`
