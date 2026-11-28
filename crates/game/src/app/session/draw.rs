@@ -247,14 +247,14 @@ impl Session {
                 }
                 _ => {}
             }
-            // A paused race is not the stack's top (`ActivityStack::paused_race`),
-            // so the match above never reaches it, and the menus over it are
-            // free to change window mode, size or render scale while it waits.
+            // A race under the stack's top (paused under the menus, or finished
+            // under a replay watch) is not reached by the match above, and what
+            // is over it is free to change window mode, size or render scale.
             // Same validation-error reasoning as the two arms above: its
             // depth attachment has to track the framebuffer too, or the resize
             // that greeted the menus leaves `resume_race`'s scene sized for a
             // framebuffer that no longer exists.
-            if let Some(stage) = self.stack.paused_race_mut() {
+            for stage in self.stack.races_under_top_mut() {
                 stage.scene.resize(
                     &self.gpu.device,
                     self.gpu.output.config.format,

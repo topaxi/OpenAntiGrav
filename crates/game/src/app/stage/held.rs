@@ -62,6 +62,15 @@ impl ActivityStack<Stage> {
         gone
     }
 
+    /// Every race under the top: paused under the menus, or finished under a replay watch.
+    pub(crate) fn races_under_top_mut(&mut self) -> impl Iterator<Item = &mut RaceStage> {
+        let under = self.depth_under_top();
+        self.iter_mut().take(under).filter_map(|stage| match stage {
+            Stage::Race(stage) => Some(&mut **stage),
+            _ => None,
+        })
+    }
+
     /// Every race on the stack, the one on screen included.
     pub(crate) fn races_mut(&mut self) -> impl Iterator<Item = &mut RaceStage> {
         self.iter_mut().filter_map(|stage| match stage {

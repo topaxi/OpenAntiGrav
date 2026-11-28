@@ -631,6 +631,11 @@ fn state_of(session: &mut Session) -> State {
             .endrace
             .as_ref()
             .map(|endrace| if endrace.is_photo() { "photo" } else { "other" }.to_string());
+        if let Some(menu) = stage.endrace.as_ref().and_then(|e| e.menu_on_screen()) {
+            let id = |option: oag_ui_screens::endrace::MenuOption| option.idstring().to_string();
+            state.endrace_options = Some(menu.options().iter().copied().map(id).collect());
+            state.endrace_option = menu.selected().map(id);
+        }
         state.hash = Some(format!("{:016x}", stage.race.core.sim.state_hash()));
         state.sim_tick = Some(stage.race.core.sim.world.tick);
         state.pilot_assist = Some(stage.race.core.sim.pilot_assist_level().name().to_string());
@@ -646,10 +651,16 @@ fn state_of(session: &mut Session) -> State {
             .to_string(),
         );
     }
-    state.tournament = session
+    let progress = session
         .current_run()
-        .and_then(|run| run.tournament.as_ref())
-        .map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
+        .and_then(|run| run.tournament.as_ref());
+    state.tournament =
+        progress.map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
+    state.tournament_points = progress.map(|progress| {
+        (0..oag_gameplay::MAX_SHIPS)
+            .map(|slot| progress.points(slot))
+            .sum()
+    });
     state.demo = match session.stack.top() {
         Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),

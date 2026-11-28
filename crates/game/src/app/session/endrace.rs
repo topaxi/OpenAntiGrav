@@ -425,7 +425,6 @@ impl Session {
         let watch_replay = WatchReplayOffer {
             recorded: matches!(self.stack.top(), Stage::Race(stage) if stage.auto_replay),
             original_menu: self.original_menu,
-            tournament_next_leg,
             networked: self.net.is_some(),
         }
         .on(crate::endrace::dialect(title_ref));

@@ -152,14 +152,15 @@ and race clocks after a seek equal the live race's at that tick.
 | L2, R2 | scrub the playhead back and on while held, 1 to 30 ticks a frame by how far it is pulled; silent, and the sound is rebuilt where it stops. Read apart from the buttons, so neither is L1 or R1 whatever the trigger mode |
 | Right stick | jog: its horizontal axis moves the playhead 1 to 10 ticks a frame; the vertical axis does nothing |
 | Select, PHOTO | photo mode at the tick on screen ([photo mode](photo-mode.md), "Over the replay viewer") |
-| Circle, Escape, a right click, EXIT | leave for the REPLAYS page |
+| Circle, Escape, a right click, EXIT | leave: back to the REPLAYS page, or to the end menu the watch came from |
 
-Backing out of the REPLAYS page after that is the front end's main page, on every title. A watched
-recording is never parked and the viewer has its own pause (Start, Cross), so the title's pause
+Backing out of the REPLAYS page after that is the front end's main page, on every title. The watch
+is pushed over the menus on the activity stack (ADR-0099), so a race paused under them stays paused
+through it. A watched recording is never paused into and the viewer has its own pause (Start, Cross), so the title's pause
 screen with its RESTART RACE and QUIT RACE rows is never built for it
 (`replay_viewer_ground_truth::leaving_a_recording_never_lands_on_the_pause_screen`: Escape, Circle
 and a click on EXIT each leave, and none lands on the pause page). The end-of-race WATCH REPLAY row
-opens the same viewer through the same path.
+opens the same viewer, pushed over the finished race ("The end-of-race row").
 
 The **speed**: at 1X the race sounds as a race does (`sound::race_tick`); at any other speed the
 effects are muted (the cues of the ticks that ran are dropped); the music is the race's own
@@ -233,8 +234,6 @@ other block.
 It is **not offered**:
 
 - on a race that was not recorded (`[replay] record = false`, or the recording failed);
-- while a Tournament has a leg left to race, on either title: watching replaces the finished race,
-  and NEXT RACE with it, and launching the cell again starts at leg 1;
 - while a network link is up (LAN or online), on either title. Watching does not drop the link, and
   the loader takes its network branch first, so it would join the room with the recording's race
   (read in `finish_loading`, not run). The recording is on the REPLAYS page once the room is left;
@@ -243,12 +242,19 @@ It is **not offered**:
 - on 2048, whose `EndRace` pages end in a strip of two icon tiles, not wired; Pure and Omega draw no
   end-of-race menu. There the REPLAYS page is the way in.
 
-**Leaving the viewer lands on REPLAYS, not back on the end menu**: the menu belongs to the finished
-race, and loading the recording replaces that race. Nothing is lost by it. A campaign medal is saved
-on the tick the race ends and the loyalty award as the screens are built, both before the menu is up.
-HD checked live (2026-11-27, headless, `--autopilot`): a time trial and a campaign single race each
-reached the row, played the race and landed on REPLAYS
-(`replay_viewer_ground_truth::hd_end_of_race_menu_watches_the_race_just_finished` is the time trial).
+**Leaving the viewer is back on the end menu it came from**, with the cursor on WATCH REPLAY: the
+watch is pushed over the finished race on the activity stack and popped when it ends, a load that
+fails included ([ADR-0099](../architecture/adr/0099-a-run-context-and-an-activity-stack-own-navigation.md),
+decision 5). The finished race keeps its end screens and its run, and is not re-armed: its medal,
+loyalty award and records were saved before the menu was up and are not saved again. So a
+Tournament leg offers the row too, and NEXT RACE after watching races the next leg on the same
+standings (`drive_ground_truth::tournament::a_tournament_leg_watched_again_comes_back_to_its_next_race`,
+Pulse PSP EU, 2026-11-28: a two-leg, one-lap mod Tournament under `--autopilot`; leg 1 scored 29
+points across the field, leg 2 started on 29 and ended above it; on the last leg the watch came back
+to its end menu and leaving that ended the tournament). HD checked the same way
+(`replay_viewer_ground_truth::hd_end_of_race_menu_watches_the_race_just_finished`, a time trial:
+EXIT is back on the end menu, never on REPLAYS). While the watch plays, two race scenes are
+resident; ADR-0099 migration step 5 measures that.
 
 ## A screenshot opens the viewer
 

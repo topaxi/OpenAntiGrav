@@ -97,17 +97,18 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   - **Network races** (LAN, online) offer no row: `Session::watch_last_race` does not drop the link and
     `finish_loading` takes the `self.net` branch before the viewer's. Offering it needs a decision on leaving the room
     to watch. Not run live.
-  - **Leaving the viewer lands on REPLAYS**, not on the finished race's menu: returning there needs the finished race
-    held behind the viewer. The same hold would let a mid-Tournament leg offer the row, which it does not today.
-    Acceptance for that fix: after watching a mid-Tournament leg, the leg's end menu returns with NEXT RACE, and
-    the tournament continues at the next leg with its standings intact.
-    **Mapped (`nav-stack-map`):** [navigation map](../../docs/architecture/navigation-map.md), "The failing case",
-    traces where the leg context is lost (`start_race_loading` drops the finished leg's `RaceStage`); the
-    structure that fixes it is [ADR-0099](../../docs/architecture/adr/0099-a-run-context-and-an-activity-stack-own-navigation.md)
-    (Accepted 2026-11-28), whose migration steps 1 to 4 end in this acceptance as a test. **Steps 1 and 2 landed**:
-    the launch slots and the tournament's `Progress` live in one `RunContext` (`crates/game/src/app/run_context.rs`),
-    moved into the `RaceStage` at build; RACE AGAIN, NEXT RACE and RESTART relaunch from the race's copy, and a
-    tournament ends with its run (a failed leg load, WATCH REPLAY on the last leg). Steps 3 to 5 are open.
+  - **Leaving the viewer is back on the finished race's end menu** (watched from an end menu), or on REPLAYS
+    (watched from the list). The watch is pushed over the finished race and popped on EXIT, so a mid-Tournament
+    leg offers the row too. **Acceptance met**: after watching a mid-Tournament leg, the leg's end menu returns with
+    NEXT RACE, and the tournament continues at the next leg with its standings intact
+    (`drive_ground_truth::tournament::a_tournament_leg_watched_again_comes_back_to_its_next_race`, Pulse PSP EU).
+    **Mapped (`nav-stack-map`), steps 1 to 4 landed:** [navigation map](../../docs/architecture/navigation-map.md),
+    "The case ADR-0099 was for";
+    [ADR-0099](../../docs/architecture/adr/0099-a-run-context-and-an-activity-stack-own-navigation.md). The run
+    context owns the launch slots and the tournament (`crates/game/src/app/run_context.rs`); one activity stack
+    (`crates/game/src/app/activity_stack.rs`) replaced `Session::stage`, `suspended_race`, `parked_menu` and
+    `return_to_replays`. **Step 5 is open**: measure resident memory with two race scenes held (the finished leg
+    under its replay) on the Steam Deck and a phone; if it does not fit, the held race drops its GPU scene.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
   craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second at Venom on all
   five titles (Phantom, first 6,000 ticks: 197 to 263; 4.5 percent over the ADR's Venom row: the sweep stored no key index), a respawn bounded to the same error on all five,

@@ -123,8 +123,13 @@ impl Session {
         // one.
         //
         // A finished race popped back to keeps it set: its result was saved when it finished.
+        // Its effect voices are rebuilt from where it stands instead, as a replay seek does: the
+        // watch over it played its own through the same voices.
         if crate::app::activity_stack::rearms_on_resume(stage.race.core.sim.finished()) {
             stage.result_saved = false;
+        } else {
+            let at = stage.race.core.sim.world.tick;
+            crate::sound::rebuild(&mut self.audio, &mut stage.race, at);
         }
         // Its last tick is a trip through the menus ago: drawn as it stands
         // until it steps again, rather than blended from a tick long past.

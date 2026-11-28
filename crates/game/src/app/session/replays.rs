@@ -332,7 +332,7 @@ impl Session {
             return;
         };
         info!("replays: WATCH {}", entry.path.display());
-        if let Err(why) = self.watch_path(&entry.path) {
+        if let Err(why) = self.watch_path(&entry.path, Origin::Replays) {
             error!("replays: {}: {why}", entry.path.display());
             self.replay_refused.insert(entry.path.clone(), why);
             self.resupply_replays(Some(&entry.key()));
@@ -350,27 +350,28 @@ impl Session {
             return;
         };
         info!("replays: WATCH REPLAY {}", path.display());
-        if let Err(why) = self.watch_path(&path) {
+        if let Err(why) = self.watch_path(&path, Origin::Pop) {
             error!("replays: {}: {why}", path.display());
             self.replay_refused.insert(path, why);
         }
     }
 
-    /// Reads the recording at `path` and starts loading the race it was made in.
+    /// Reads the recording at `path` and starts loading the race it was made in, as a run that
+    /// ends at `origin`.
     ///
     /// # Errors
     ///
     /// Why it cannot be opened: the file does not read, no disc is open, or the header cannot be
     /// rebuilt here.
-    fn watch_path(&mut self, path: &std::path::Path) -> Result<(), String> {
+    fn watch_path(&mut self, path: &std::path::Path, origin: Origin) -> Result<(), String> {
         let replay = std::fs::read(path)
             .map_err(|e| e.to_string())
             .and_then(|bytes| Replay::from_bytes(&bytes).map_err(|e| e.to_string()))?;
         let options = self.replay_options(&replay)?;
-        // A watch is a run of its own, which lands back on REPLAYS when it ends.
+        // A watch is a run of its own, which lands back on REPLAYS or pops when it ends.
         self.end_run();
         self.run = Some(RunContext {
-            origin: Some(Origin::Replays),
+            origin: Some(origin),
             ..RunContext::default()
         });
         self.start_watching(
@@ -432,8 +433,9 @@ impl Session {
         Ok(options)
     }
 
-    /// Parks nothing and starts loading the race `options` describes for the viewer to watch
-    /// `watching` over.
+    /// Starts loading the race `options` describes for the viewer to watch `watching` over,
+    /// pushed over what is on screen: a finished race keeps its end screens and its run, and a
+    /// race paused under the menus stays paused (ADR-0099, decision 5).
     ///
     /// # Errors
     ///
@@ -443,14 +445,13 @@ impl Session {
         options: oag_raceplay::Options,
         watching: Watching,
     ) -> Result<(), String> {
-        self.drop_paused_race();
         if let Some(run) = self.run.as_mut() {
             run.pending_event = None;
             run.pending_card = None;
         }
         let mode = options.mode;
         self.watching = Some(Box::new(watching));
-        self.start_race_loading(options, mode, None, false)
+        self.start_race_loading(options, mode, None, false, true)
             .map_err(|e| {
                 self.watching = None;
                 self.end_run();
@@ -815,8 +816,9 @@ impl Session {
         }
     }
 
-    /// Leaves the viewer for the REPLAYS page. Nothing was recorded, so nothing is written; the
-    /// race is dropped, never parked.
+    /// Leaves the viewer: its race is popped (nothing was recorded, so nothing is written), and
+    /// a watch from an end menu is back on that finished race's end menu; one from REPLAYS lands
+    /// on the REPLAYS page, and a screenshot's on the menus.
     pub(crate) fn leave_viewer(&mut self) {
         let Some(closed) = self.viewer.take() else {
             return;
@@ -829,10 +831,32 @@ impl Session {
         self.audio.pause_race_music();
         self.save_race_music();
         self.audio.stop_race_sfx();
+        if self.pop_watch(origin) {
+            return;
+        }
         if let Err(error) = self.open_menus_from(origin) {
             error!("cannot return to the menus: {error:#}");
             self.quit = true;
         }
+    }
+}
+
+impl Session {
+    /// The watch on top is popped, and a race it was pushed over (an end menu's WATCH REPLAY,
+    /// `Origin::Pop`) is resumed. `false` leaves the session to open the menus: the watch was
+    /// over them, or is the only entry.
+    pub(crate) fn pop_watch(&mut self, origin: Option<Origin>) -> bool {
+        let Some(watch) = self.pop_activity() else {
+            return false;
+        };
+        if let Stage::Race(watched) = watch {
+            crate::app::race_build::drop_off_thread(watched);
+        }
+        if origin == Some(Origin::Pop) && matches!(self.stack.top(), Stage::Race(_)) {
+            self.resumed();
+            return true;
+        }
+        false
     }
 }
 

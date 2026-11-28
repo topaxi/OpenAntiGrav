@@ -318,11 +318,12 @@ impl Session {
                 && !stage.watching
                 && stage.demo.is_none()
                 && stage.benchmark.is_none());
-        // Anything over menus already on the stack (a hosted campaign map) ends, and those
-        // menus are the ones replaced.
+        // Anything over menus already on the stack (a hosted campaign map, a replay watch) ends,
+        // and those menus are the ones replaced; with no menus on it the stack is replaced whole.
         if !pauses {
             drop(self.stack.unwind_to(StageKind::Menu));
         }
+        let whole = !pauses && !matches!(self.stack.top(), Stage::Menu(_));
         let run = self
             .stack
             .top_run()
@@ -392,6 +393,8 @@ impl Session {
         }));
         if pauses {
             self.stack.push(menus, run);
+        } else if whole {
+            drop(self.stack.replace_all(menus, run));
         } else {
             drop(self.stack.replace(menus, run));
         }

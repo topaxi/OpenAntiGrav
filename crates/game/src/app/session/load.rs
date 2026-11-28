@@ -643,20 +643,22 @@ impl Session {
         let plan_ahead = self.net.is_none()
             && self.split_lobby.is_none()
             && self.controls.assignment().humans().is_none();
-        self.start_race_loading(options, options_mode, options_track, plan_ahead)
+        self.start_race_loading(options, options_mode, options_track, plan_ahead, false)
     }
 
     /// The loading screen for `options` and the worker that reads the circuit: the half of a
     /// launch that is the same for a race a player set up and a recording being watched.
     ///
     /// `options_track` is the track file the launch was asked for, before a two-title race routed it
-    /// anywhere; the loading screen is its own.
+    /// anywhere; the loading screen is its own. `over` pushes the load over what is on screen (a
+    /// replay watch); else it takes the place of everything the stack holds.
     pub(crate) fn start_race_loading(
         &mut self,
         options: oag_raceplay::Options,
         options_mode: oag_race::Mode,
         options_track: Option<std::path::PathBuf>,
         plan_ahead: bool,
+        over: bool,
     ) -> Result<()> {
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
@@ -765,9 +767,12 @@ impl Session {
             track_loading.as_ref(),
             card,
         )?;
-        // The load takes the place of everything the stack holds.
         let run = self.run.as_ref().map(|run| run.id);
-        drop(self.stack.replace_all(loading, run));
+        if over {
+            self.stack.push(loading, run);
+        } else {
+            drop(self.stack.replace_all(loading, run));
+        }
         Ok(())
     }
 
@@ -1193,6 +1198,10 @@ impl Session {
                 } else if let Some(watching) = self.watching.take() {
                     self.replay_refused
                         .insert(watching.path, crate::replays::page::refusal(&e));
+                }
+                // A watch pushed over a finished race pops back to it.
+                if self.pop_watch(origin) {
+                    return Ok(());
                 }
                 return self.open_menus_from(origin);
             }

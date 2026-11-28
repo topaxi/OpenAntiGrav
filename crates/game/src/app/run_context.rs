@@ -60,6 +60,8 @@ pub(crate) struct RunContext {
 pub(crate) enum Origin {
     /// The REPLAYS page: a recording WATCHed from its list goes back to it.
     Replays,
+    /// Whatever the run was pushed over: WATCH REPLAY's end menu.
+    Pop,
 }
 
 /// The race options a mod campaign event replaces: a cross-disc event's

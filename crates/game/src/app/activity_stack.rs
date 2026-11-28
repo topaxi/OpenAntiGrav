@@ -86,6 +86,11 @@ impl<T: Activity> ActivityStack<T> {
         self.entries.len()
     }
 
+    /// How many entries are under the top.
+    pub(crate) fn depth_under_top(&self) -> usize {
+        self.entries.len() - 1
+    }
+
     /// The entry `depth` below the top (0 is the top).
     pub(crate) fn below(&self, depth: usize) -> Option<&T> {
         let index = self.entries.len().checked_sub(depth + 1)?;
