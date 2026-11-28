@@ -151,7 +151,9 @@ draws only at its screenshots and has no swapchain, so a windowed race holds mor
 `--no-soundtrack` leaves out music decoding. Desktop is `target/debug` on glibc
 (Ryzen 9 7900, Linux 7.3.6, glibc 2.44; load 0 to 20 across runs, memory did not
 move with it). The phone is a Galaxy S21 (SM-G991B, Mali-G78, Android 14,
-7.0 GiB) running the `dist` APK (Scudo), battery 28 to 34 C.
+7.0 GiB) running the `dist` APK (Scudo), battery 28 to 34 C. Both platforms ran a
+fresh profile with default settings (the phone's own was moved aside), so the
+phone's `graphics.texture_compression` was `original`.
 
 ### Desktop
 
@@ -318,9 +320,53 @@ SHA-256 of the output, before `SHOTS` is replaced by a directory:
   `sim_tick` 3000 to 3600; **b** `stage=race`, `endrace=other`, `sim_tick` within
   700 below the walk's `end`; **c** `replay=playing`, `sim_tick` 3000 to 3600;
   **d** `stage=menu page=main` after (c).
-- **Heap.** The `mallinfo2` shim described under "Reproducing it" above:
+- **Heap.** `LD_PRELOAD` the shim below, with `MALLSHIM_OUT=mallinfo.jsonl`:
   `SIGUSR1` one second into each window, `SIGUSR2` (trim) 2.5 s into (d), with
-  **d trim** read from 3.5 s on.
+  **d trim** read from 3.5 s on. It is the shim "A second race in one session",
+  "Reproducing it" describes:
+
+  ```c
+  // gcc -O2 -shared -fPIC -o mallshim.so mallshim.c -lpthread
+  #define _GNU_SOURCE
+  #include <malloc.h>
+  #include <pthread.h>
+  #include <signal.h>
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  static void *serve(void *arg) {
+      sigset_t set;
+      sigemptyset(&set);
+      sigaddset(&set, SIGUSR1);
+      sigaddset(&set, SIGUSR2);
+      const char *out = getenv("MALLSHIM_OUT");
+      unsigned long n = 0;
+      for (;;) {
+          int sig = 0;
+          if (sigwait(&set, &sig) != 0) continue;
+          if (sig == SIGUSR2) malloc_trim(0);
+          struct mallinfo2 m = mallinfo2();
+          FILE *f = fopen(out, "a");
+          if (!f) continue;
+          fprintf(f, "{\"n\":%lu,\"trim\":%d,\"arena\":%zu,\"hblkhd\":%zu,\"uordblks\":%zu,\"fordblks\":%zu}\n",
+                  ++n, sig == SIGUSR2, m.arena, m.hblkhd, m.uordblks, m.fordblks);
+          fclose(f);
+      }
+      return arg;
+  }
+
+  __attribute__((constructor)) static void start(void) {
+      if (!getenv("MALLSHIM_OUT")) return;
+      sigset_t set;
+      sigemptyset(&set);
+      sigaddset(&set, SIGUSR1);
+      sigaddset(&set, SIGUSR2);
+      pthread_sigmask(SIG_BLOCK, &set, NULL);
+      pthread_t t;
+      pthread_create(&t, NULL, serve, NULL);
+      pthread_detach(t);
+  }
+  ```
 
 **After step 4 the walk's tail changes, and this tail has not been run.** EXIT pops
 back to the end menu, so replace the `escape; until page=replays ...` line with:
@@ -333,7 +379,10 @@ press up up up; press cross; until page=main within 400
 
 (`up up` on HD). Add a window **e**: `endrace=other`, no `replay`, after (c); it
 should read like (b). Where focus lands after the pop is unknown, so read `e.png`
-and adjust the `up` presses until the cursor is on RETURN TO MENUS.
+and adjust the `up` presses until the cursor is on RETURN TO MENUS. That row
+lands on `page=main` today (checked on both titles, one run each, RX 7800 XT), so
+the (d) rule holds as written. The rest of the walk, from `ticks 60; screenshot
+SHOTS/d.png` on, is unchanged.
 
 ## Open
 
@@ -347,12 +396,11 @@ and adjust the `up` presses until the cursor is on RETURN TO MENUS.
   walk used Race Box) and the second race's lag on a presented frame.
 - A race that ends by finishing is dropped in place on the frame thread
   (`Session::open_menus`), not through `drop_off_thread`; the next build's trim
-  covers its memory.
+  covers its memory. Measured on the way out of the replay viewer: HD sits at
+  about 1005 MiB resident in the menus there, against 359 after `malloc_trim(0)`.
 - After numbers owed by ADR-0099 step 4: re-run the walks under "A finished race
   held under its replay" with the race held, desktop and S21, HD first.
 - Step 5's fallback (drop the held GPU scene) leaves HD's roughly 750 MiB of
   heap; `graphics.texture_compression=astc` on the phone is the other lever for
   the GPU half. Neither is measured (ASTC needs two races on a circuit, since the
   first fills the cache).
-- Leaving the replay viewer for the menus drops its race with no trim: HD sits at
-  about 1005 MiB resident there against 359 after `malloc_trim(0)`.
