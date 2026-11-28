@@ -83,9 +83,9 @@ has HD without Fury.
 
 ### From the PS3 disc
 
-1. Dump your own disc to an `.iso`: see the
-   [RPCS3 quickstart](https://rpcs3.net/quickstart). Choose an ISO: a dumped
-   disc folder is not opened.
+1. Dump your own disc: see the
+   [RPCS3 quickstart](https://rpcs3.net/quickstart). The game needs an `.iso`.
+   A dumped disc folder is not opened.
 2. **Do not decrypt it.** The game reads an encrypted image and decrypts it in
    memory. An image you already decrypted also works.
 3. For an encrypted image, you need the 16-byte key of your own disc, recorded
@@ -113,7 +113,7 @@ and [PS3 disc encryption](../formats/ps3-disc.md).
 
 This route was checked with the Europe version (`NPEA00057`, v3.00) only. You need the package (`.pkg`)
 of your own purchase and the licence file (`.rap`) that comes with it. For
-getting both from your own console, see the
+dumping from your own console, see the
 [RPCS3 quickstart](https://rpcs3.net/quickstart). The install tool is RPCS3's
 own package installer.
 
@@ -156,8 +156,9 @@ derived by the console's own hardware: see
 2. The game needs files that are already decrypted. In that guide, copying the
    folder with VitaShell's "Open decrypted" does this. Its FAGDec step decrypts
    program files, which this game never reads.
-3. Zip the folder as in [Pack a `.vpk`](#pack-a-vpk). The name must end in
-   `.vpk`, not `.zip`.
+3. Zip the folder with the command in [Pack a `.vpk`](#pack-a-vpk), not with
+   the guide's zip step: a large compressed file is refused. The name must end
+   in `.vpk`, not `.zip`.
 
 **No console dump has been tried.** The reader was tested with stand-in `.vpk`
 files made from folders unpacked on a computer. [Vita packages](../formats/vita-package.md)
@@ -250,10 +251,15 @@ does not say where to get one.
 
 For dumping a game from your own console, see the
 [shadPS4 quickstart](https://shadps4.net/quickstart/). It produces folders, not
-fake packages. **This project has not tried a console-dumped folder**, so it
-cannot say that one opens.
+fake packages:
 
-If you have both files from your own copy in that form:
+- A folder as that guide names it (`CUSA05670`, `CUSA05670-patch`) is not found.
+- The game looks for `omega-eu/uroot/` and
+  `omega-eu-patch/uroot/data09.psarc`, in the
+  [unpacked layout](../overview/installing.md#omega-and-a-2048-folder-unpack-the-package-into-a-folder).
+- Moving a console dump into that layout has not been tried.
+
+If you have both files from your own copy as fake packages:
 
 1. Put the base `.pkg` and the patch `.pkg` in the **same folder**, your
    `images` folder.
