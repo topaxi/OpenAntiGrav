@@ -134,8 +134,7 @@ impl Session {
         // A demo leaves no record, medal, loyalty or ghost.
         self.in_unrecorded_demo()
             || self
-                .race_options
-                .as_ref()
+                .race_options_now()
                 .is_some_and(|options| crate::official::unofficial(options, self.give))
     }
 
