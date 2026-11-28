@@ -49,3 +49,7 @@ parent_hash = "0x0123456789abcdef"
 [finish]
 place = 2
 ticks = 7100
+
+[[active_mods]]
+id = "oag.detonator-pulse"
+version = "1.0.0"

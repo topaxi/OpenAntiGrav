@@ -42,6 +42,8 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         track_stats,
         vex_geometry: sim_vex_geometry,
         extents,
+        active_mods,
+        mods_differ: _,
     } = sim;
     let _pack = texture_pack;
     let mut report = Vec::new();
@@ -886,6 +888,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     let view = ViewSetup {
         trail_sparks: options.trail_sparks,
         request: Some(options.replay_setup_on(&track)),
+        active_mods,
         campaign_event: false,
         score_pass: None,
         hd_trail: trail_shape.is_some().then_some(hd_trail_red),

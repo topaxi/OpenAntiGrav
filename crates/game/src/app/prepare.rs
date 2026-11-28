@@ -192,6 +192,7 @@ impl Pending {
             extensions: Vec::new(),
             find_extensions: None,
             recorded_mods: None,
+            recorded_active_mods: None,
             // Filled at launch (`crate::texture_pack::attach`), from the packs on then.
             find_texture_packs: None,
             no_overrides: false,

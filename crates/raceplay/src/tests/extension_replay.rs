@@ -6,7 +6,7 @@
 use oag_gameplay::PlayerInputs;
 use oag_replay::{Header, Verifier};
 
-use super::extensions::{grid, on};
+use super::extensions::{grid, grid_seen, on};
 use crate::Race;
 use crate::extensions::{Prepared, check_recorded, restrict_to};
 
@@ -40,10 +40,18 @@ fn two_crossings(mut race: Race) -> Race {
 
 #[test]
 fn a_vanilla_race_keeps_the_lap_it_drove_as_a_ghost() {
-    let mut race = two_crossings(grid(Prepared::default()));
-    assert!(
-        race.take_new_best_ghost().is_some(),
-        "the control: the lap crossing yields a ghost, so the modded case below tests the gate"
+    let mods = vec![oag_replay::ActiveMod::new("a.data", "1.0.0")];
+    let view = crate::ViewSetup {
+        active_mods: mods.clone(),
+        ..crate::tests::fixture_view()
+    };
+    let mut race = two_crossings(grid_seen(Prepared::default(), view));
+    let ghost = race.take_new_best_ghost().expect(
+        "the control: the lap crossing yields a ghost, so the modded case below tests the gate",
+    );
+    assert_eq!(
+        ghost.header.active_mods, mods,
+        "a ghost file names the mods"
     );
 }
 

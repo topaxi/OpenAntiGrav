@@ -53,6 +53,7 @@ fn populated() -> Replay {
         add_on_campaign: Some("DLC1".into()),
         zone_model: true,
     });
+    header.active_mods = vec![oag_replay::ActiveMod::new("oag.detonator-pulse", "1.0.0")];
     header.ticks = 7_200;
     header.finish = Some(oag_replay::header::Finish {
         place: 2,
@@ -208,6 +209,31 @@ fn a_header_naming_its_simulation_modules_is_accepted_by_both_and_survives_a_rou
         verdicts(&bad).1.is_err(),
         "a module hash that is not hex is refused by the schema"
     );
+}
+
+#[test]
+fn a_header_lists_the_active_mods_in_load_order_or_none() {
+    let mut replay = populated();
+    replay.header.active_mods = vec![
+        oag_replay::ActiveMod::new("b.second", "2.0.0"),
+        oag_replay::ActiveMod::new("a.first", "1.0.0"),
+    ];
+    let text = head(&replay.to_bytes());
+    assert!(text.contains("[[active_mods]]"), "{text}");
+    let (loader, schema) = verdicts(&text);
+    loader.expect("the loader reads it");
+    schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
+    let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
+    assert_eq!(read.header.active_mods, replay.header.active_mods);
+
+    replay.header.active_mods.clear();
+    let text = head(&replay.to_bytes());
+    assert!(!text.contains("active_mods"), "{text}");
+    let (loader, schema) = verdicts(&text);
+    loader.expect("the loader reads it");
+    schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
+    let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
+    assert_eq!(read.header.active_mods, Vec::new());
 }
 
 #[test]

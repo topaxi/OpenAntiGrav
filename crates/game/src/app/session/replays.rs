@@ -207,6 +207,9 @@ pub(crate) struct Active {
     /// Whether the viewer was opened from a screenshot, which leaving it returns to the main
     /// menu from rather than to the REPLAYS page.
     pub(crate) from_shot: bool,
+    /// How the mods on differ from the recording's ([`oag_replay::ActiveMod::differences`]),
+    /// said over the picture as the viewer opens.
+    pub(crate) mods_differ: Option<String>,
     /// The touch controls were hidden by a tap on the picture.
     chrome_hidden: bool,
     /// Ticks since a finger last touched the screen.
@@ -276,16 +279,23 @@ pub(crate) fn open_viewer(
         dropped,
     } = watching;
     let (setup, view, modules) = setup.context("the race's setup was not kept")?;
+    // Mods switched since the recording: whatever the rebuild then says, the mod is named.
+    let mods_differ =
+        oag_replay::ActiveMod::differences(&replay.header.active_mods, &view.active_mods);
     let viewer = Viewer::open(setup, view, modules, *replay).map_err(|e| {
-        let why = match &e {
-            OpenError::NoPoseTrack(_) => page::NO_POSE_TRACK.to_string(),
-            OpenError::Start(start) => format!("{start:#}"),
+        let why = match (&e, &mods_differ) {
+            (_, Some(differ)) => format!("{}{differ}", page::MODS),
+            (OpenError::NoPoseTrack(_), None) => page::NO_POSE_TRACK.to_string(),
+            (OpenError::Start(start), None) => format!("{start:#}"),
         };
         // A screenshot is no row of the list: its refusal is told to the player at once.
         if shot.is_none() {
             refused.insert(path.clone(), why);
         }
-        anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display())
+        oag_raceplay::ModsDiffer::over(
+            anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display()),
+            mods_differ.as_deref(),
+        )
     })?;
     let viewer = match shot {
         Some((tick, _)) => viewer.starting_at(tick),
@@ -306,6 +316,7 @@ pub(crate) fn open_viewer(
         scrubbing: false,
         shot,
         from_shot: shot.is_some() || dropped,
+        mods_differ,
         chrome_hidden: false,
         idle: 0,
         bar_drag: None,

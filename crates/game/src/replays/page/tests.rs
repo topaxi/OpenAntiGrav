@@ -222,6 +222,34 @@ fn the_detail_lines_lead_with_the_finish_and_name_what_is_not_verified() {
     });
 }
 
+/// A recording refused for its mods names them alone, which is what the row's one line has room
+/// for, and its details leave the note slot to that line.
+#[test]
+fn a_refusal_over_mods_names_them_and_keeps_the_note_slot_clear() {
+    let error = oag_raceplay::ModsDiffer::over(
+        anyhow::anyhow!("a long chain of missing files"),
+        Some("missing a.data 1.0.0"),
+    );
+    let mut refused = BTreeMap::new();
+    refused.insert(PathBuf::from("m.oagr"), refusal(&error));
+    with(&refused, |cx| {
+        let head = || Head::Read(Box::new(header("single_race")));
+        let modded = entry("m.oagr", Folder::Auto, head(), 1);
+        assert_eq!(
+            choice(&modded, cx).unavailable.as_deref(),
+            Some("missing a.data 1.0.0")
+        );
+        let held = lines_within(&modded, cx, 3);
+        assert_eq!(held.len(), 3);
+        assert_eq!(held[0], (String::new(), String::new()));
+        assert_eq!(held[1].0, "CIRCUIT");
+        let plays = entry("p.oagr", Folder::Auto, head(), 1);
+        assert_eq!(lines_within(&plays, cx, 3)[0].0, "CIRCUIT");
+    });
+    let other = anyhow::anyhow!("inner").context("outer");
+    assert_eq!(refusal(&other), "outer: inner");
+}
+
 #[test]
 fn an_empty_list_is_one_dimmed_value_that_says_why() {
     let refused = BTreeMap::new();

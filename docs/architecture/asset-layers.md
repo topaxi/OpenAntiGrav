@@ -205,10 +205,24 @@ plate, a ring with a craft triangle, arrowheads and chevrons.
   checking the fragment composes under Omega's `.gnf` atlases.
 - **HD**: unchanged; the disc's layouts embed the widgets, `fragment` is `None`.
 
+## Records and ghosts
+
+A replay header and a ghost file list the mods that were on
+([replay file](../formats/replay-file.md), "Active mods"). The override directory is not listed.
+**Records do not**: `records.toml` rows are keyed on title, track, mode and class alone, and the
+finish and exit captures (`Session::frame`, `escape.rs`) ask nothing about mods.
+
+- A mod's fallback entries answer only names no disc or DLC holds (ADR-0100), so they cannot
+  change what an original race reads. What they add (Pulse Detonator) has rows of its own.
+- A ghost is one file per records row, drawn from poses. A quicker lap set with a data mod on
+  replaces the stored one; its header says which mods were on.
+- A simulation-module (MODDED) race sets no ghost (ADR-0091 decision 5). The
+  [wasm extensions design](wasm-extensions/README.md) (4.4) gives its results a separate modded
+  table; **that table is not built**.
+
 ## Open
 
-- The override has no hash-addressed or archive-mounting form, and the replay header does
-  not record that mods were active.
+- The override has no hash-addressed or archive-mounting form.
 - PromptFont glyphs (`assets/ui/prompts`) and the cursors (`assets/cursors`) load by their
   own paths and have not been moved into the fallback layer.
 - The optional second step: when the source title's own disc is also present (2048 when a

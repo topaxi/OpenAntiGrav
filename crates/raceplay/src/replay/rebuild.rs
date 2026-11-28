@@ -64,6 +64,11 @@ impl Options {
         self.skill_level = launch.skill_level;
         self.seed = Some(header.seed);
         self.recorded_mods = Some(header.mods.clone());
+        self.recorded_active_mods = Some(header.active_mods.clone());
+        // An online room's race mounted a network race's layers, so its rebuild does too.
+        if super::Room::from_table(&header.options)?.is_some() {
+            self.network = true;
+        }
         Ok(())
     }
 

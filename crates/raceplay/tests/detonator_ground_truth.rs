@@ -1398,3 +1398,69 @@ fn a_pulse_detonator_race_without_its_data_is_refused() {
         "{why}"
     );
 }
+
+/// A Pulse Detonator recording lists the mod it was raced with, and rebuilding it with the mod
+/// off names that mod above whatever the load then fails on (`docs/formats/replay-file.md`,
+/// "Active mods").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_detonator_replay_names_the_mod_it_is_missing() {
+    let (Some(path), Some(_)) = (
+        oag_testdata::image("data/images/pulse-psp-usa.chd"),
+        with_pulse_detonator_mod(),
+    ) else {
+        return;
+    };
+    oag_source::layers::register_enabled(vec![oag_source::layers::EnabledMod {
+        id: "oag.detonator-pulse".to_string(),
+        version: "1.0.0".to_string(),
+        titles: vec!["wipeout-pulse".to_string()],
+        psp_only: false,
+        network: false,
+    }]);
+    let source = path.display().to_string();
+    let loaded = race::load(&race::Options {
+        no_effects: true,
+        source: source.clone(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        ..race::Options::default()
+    })
+    .expect("loading a Pulse Detonator race");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.start_recording(oag_replay::Header::new(
+        "Wipeout Pulse",
+        "t",
+        "detonator",
+        "venom",
+        "d",
+        0,
+    ));
+    let bytes = race.recorded().expect("recording").to_bytes();
+    let header = oag_replay::Replay::from_bytes(&bytes)
+        .expect("reads back")
+        .header;
+    assert_eq!(
+        header.active_mods,
+        [oag_replay::ActiveMod::new("oag.detonator-pulse", "1.0.0")]
+    );
+    assert!(header.mods.is_empty(), "data only: no simulation module");
+
+    let again = race::Options::for_replay(&header, &source).expect("the request");
+    let same = race::load_sim(&again).expect("with the mod on");
+    assert_eq!(same.mods_differ, None);
+
+    oag_source::layers::register_mods(Vec::new());
+    oag_source::layers::register_enabled(Vec::new());
+    let Err(refused) = race::replay::load_recorded(&header, &source) else {
+        panic!("a Pulse Detonator rebuild with no mod carrying its data is refused");
+    };
+    let why = format!("{refused:#}");
+    assert!(
+        why.starts_with(
+            "loading the replay's race: mods differ from the recording: \
+             missing oag.detonator-pulse 1.0.0: "
+        ),
+        "{why}"
+    );
+}

@@ -1468,8 +1468,8 @@ impl crate::Race {
 }
 
 impl crate::RaceSim {
-    /// Whether a simulation module runs in this race (MODDED: no ghost, no lap record; the
-    /// input recording is kept and names the modules, README 4.4).
+    /// Whether a simulation module runs in this race (MODDED: no ghost; the input recording is
+    /// kept and names the modules, README 4.4. Records do not ask this).
     #[must_use]
     pub fn is_modded(&self) -> bool {
         self.extensions.any()

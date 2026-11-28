@@ -20,6 +20,7 @@ impl Default for Options {
             extensions: Vec::new(),
             find_extensions: None,
             recorded_mods: None,
+            recorded_active_mods: None,
             find_texture_packs: None,
             no_overrides: false,
             network: false,

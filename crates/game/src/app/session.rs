@@ -1277,12 +1277,12 @@ impl Shell {
     /// Takes what a rebuild for the mods made: its tree, listing and campaigns, its mods'
     /// fallback entries (registered for every later open) and the modes they now offer.
     pub(crate) fn adopt_rebuilt(&mut self, rebuilt: mods_page::Rebuilt) {
-        let (definition, listing, installed, fallbacks) = rebuilt;
+        let (definition, listing, installed, for_loads) = rebuilt;
         self.definition = definition;
         self.mods = listing;
         self.custom_campaigns = std::sync::Arc::new(installed);
         // A mod's fallback entries can add a mode's data (ADR-0100): the MODE row follows.
-        oag_source::layers::register_mods(fallbacks);
+        for_loads.register();
         let modes = crate::boot::offered_modes(self.title, &self.mode_data_held);
         self.modes = menu::mode_choices(&self.strings, &modes);
     }

@@ -65,7 +65,12 @@ file. The list reads each file's `HEAD` only (`Replay::read_head`, a few hundred
 - **A file this build will not play is listed dimmed with the reason** (the note slot, as a mod that
   did not load is): RECORDED BY A NEWER VERSION (a header naming another kind or a later major),
   DAMAGED FILE, CANNOT BE REBUILT: NO LAUNCH REQUEST, RECORDED ON <TITLE>: OPEN THAT DISC. The note
-  takes the first detail line's place.
+  takes the first detail line's place, and the detail lines start one lower (a blank line stands in
+  that place; on HD, whose details have a column of their own, they move down a row with it).
+- **A rebuild refused with other mods on** says the differences alone, e.g.
+  `MISSING OAG.DETONATOR-PULSE 1.0.0`, with no lead: Pulse's one line cut the mod's name off after
+  CANNOT BE REBUILT HERE. English in every language. See [the replay file](../formats/replay-file.md),
+  "Active mods", for the viewer's notice when the race loads anyway.
 - **2048 has no list of rows**: its front end is the disc's own touch grid, so REPLAYS is the fourth
   of this build's tiles on `GameModeChoice` (`EXTRA_TILES` is four now, the fourth 80 units tall to
   fit under the grid's 544; a mod's REMIX tile still fits).

@@ -582,3 +582,21 @@ fn following_skips_a_craft_out_of_the_race() {
     );
     assert_ne!(race.core.player_slot(), start);
 }
+
+/// A recording lists the mods its race was set up with, and a race with none lists none.
+#[test]
+fn a_recording_lists_the_mods_its_race_was_set_up_with() {
+    for on in [
+        Vec::new(),
+        vec![oag_replay::ActiveMod::new("a.data", "1.0.0")],
+    ] {
+        let view = crate::ViewSetup {
+            active_mods: on.clone(),
+            ..crate::tests::fixture_view()
+        };
+        let mut race = Race::start(fixture(), view, crate::extensions::Prepared::default());
+        race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
+        let replay = race.recorded().expect("recording");
+        assert_eq!(replay.header.active_mods, on);
+    }
+}

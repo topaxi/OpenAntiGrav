@@ -49,7 +49,7 @@ pub(super) mod ripple;
 pub(crate) mod roster;
 mod seams;
 pub(crate) mod sim;
-pub use sim::{SimLoad, load_sim};
+pub use sim::{ModsDiffer, SimLoad, load_sim};
 #[cfg(feature = "view")]
 mod skin;
 mod start_boost_report;
@@ -206,7 +206,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let sim = load_sim(options)?;
     #[cfg(feature = "view")]
     {
-        load_view(sim, options)
+        let mods_differ = sim.mods_differ.clone();
+        load_view(sim, options).map_err(|e| ModsDiffer::over(e, mods_differ.as_deref()))
     }
 
     #[cfg(not(feature = "view"))]

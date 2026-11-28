@@ -120,8 +120,8 @@ fn a_mod_folder_is_one_layer_per_title_and_an_open_keeps_its_own() {
         "an empty folder is no layer"
     );
     let layering = Layering {
-        overrides: Vec::new(),
         mods,
+        ..Layering::none()
     };
     let pulse = layering.mods_for(TITLE);
     assert_eq!(pulse.len(), 1);
@@ -159,4 +159,38 @@ fn the_registered_mods_are_the_players_until_replaced() {
     assert!(!registered_mods_hold(oag_pure::TITLE, "data/xml/ours.xml"));
     register_mods(Vec::new());
     assert!(!registered_mods_hold(TITLE, "data/xml/ours.xml"));
+}
+
+/// An enabled mod is listed for a race on a title it admits, a PPSSPP pack on a PSP source
+/// alone, and a single-player mod in no network race.
+#[test]
+fn an_enabled_mod_is_listed_for_its_titles_platform_and_network() {
+    let any = EnabledMod {
+        id: "a.any".to_string(),
+        version: "1.0.0".to_string(),
+        titles: Vec::new(),
+        psp_only: false,
+        network: true,
+    };
+    let pack = EnabledMod {
+        id: "b.pack".to_string(),
+        titles: vec![slug(TITLE)],
+        psp_only: true,
+        network: false,
+        ..any.clone()
+    };
+    assert!(any.is_for(&[oag_hd::TITLE], Platform::Ps3));
+    assert!(pack.is_for(&[TITLE], Platform::Psp));
+    assert!(
+        pack.is_for(&[oag_hd::TITLE, TITLE], Platform::Psp),
+        "a craft's title counts"
+    );
+    assert!(!pack.is_for(&[TITLE], Platform::Ps2));
+    assert!(!pack.is_for(&[oag_hd::TITLE], Platform::Psp));
+    let layering = Layering {
+        enabled: vec![any.clone(), pack],
+        ..Layering::none()
+    };
+    assert_eq!(layering.for_network().enabled, [any]);
+    assert!(Layering::none().enabled.is_empty());
 }

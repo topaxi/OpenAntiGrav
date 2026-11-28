@@ -186,6 +186,17 @@ type = "integer"
 type = "array"
 itemtype = "integer"
 
+# A mod that was on for the race, data-only ones included (docs/formats/replay-file.md,
+# "Active mods"). Absent for a race with none.
+[types.active_mod]
+type = "table"
+
+[types.active_mod.id]
+type = "string"
+
+[types.active_mod.version]
+type = "string"
+
 [elements]
 
 [elements.toml-schema]
@@ -254,4 +265,10 @@ optional = true
 [elements.mods]
 type = "array"
 itemtype = "types.mod"
+optional = true
+
+# The mods that were on, in load order.
+[elements.active_mods]
+type = "array"
+itemtype = "types.active_mod"
 optional = true

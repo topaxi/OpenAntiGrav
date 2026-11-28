@@ -580,6 +580,32 @@ fn game_version() -> semver::Version {
         .unwrap_or_else(|_| semver::Version::new(0, 0, 0))
 }
 
+/// [`Mods::for_loads`]'s answer, registered at start and again whenever a mod is switched.
+#[derive(Debug)]
+pub struct ForLoads {
+    /// The mods' fallback entries (ADR-0100).
+    pub fallbacks: Vec<oag_source::layers::ModFallback>,
+    /// Every mod that is on.
+    pub enabled: Vec<oag_source::layers::EnabledMod>,
+}
+
+impl ForLoads {
+    /// Hands both to every later open of a title's archives
+    /// ([`oag_source::layers::register_mods`], [`oag_source::layers::register_enabled`]).
+    pub fn register(self) {
+        for fallback in &self.fallbacks {
+            log::debug!(
+                "mod fallback for {}: {} entries from {}",
+                fallback.slug,
+                fallback.layer.len(),
+                fallback.layer.label()
+            );
+        }
+        oag_source::layers::register_mods(self.fallbacks);
+        oag_source::layers::register_enabled(self.enabled);
+    }
+}
+
 /// The folder a mod's fallback entries sit in, one sub-folder per title slug (ADR-0100).
 pub const FALLBACK_DIR: &str = "fallback";
 
@@ -679,25 +705,30 @@ fn fallbacks_of(m: &oag_mod::Mod) -> Vec<oag_source::layers::ModFallback> {
 
 impl Mods {
     /// The fallback entries of every mod that is on (ADR-0100), each title's in the mods'
-    /// search order: what [`Self::register_fallbacks`] hands the archive opens.
+    /// search order: what [`Self::for_loads`] hands the archive opens.
     #[must_use]
     pub fn fallbacks(&self) -> Vec<oag_source::layers::ModFallback> {
         self.player().flat_map(fallbacks_of).collect()
     }
 
-    /// Registers [`Self::fallbacks`] for every later open of a title's archives
-    /// ([`oag_source::layers::register_mods`]): called at start and whenever a mod is switched.
-    pub fn register_fallbacks(&self) {
-        let fallbacks = self.fallbacks();
-        for fallback in &fallbacks {
-            log::debug!(
-                "mod fallback for {}: {} entries from {}",
-                fallback.slug,
-                fallback.layer.len(),
-                fallback.layer.label()
-            );
+    /// What the mods that are on hand every later load: [`Self::fallbacks`], and every one of
+    /// them in load order for a recorded race to list ([`oag_source::layers::EnabledMod`]),
+    /// the built-in extras left out as the build's own.
+    #[must_use]
+    pub fn for_loads(&self) -> ForLoads {
+        ForLoads {
+            fallbacks: self.fallbacks(),
+            enabled: self
+                .player()
+                .map(|m| oag_source::layers::EnabledMod {
+                    id: m.manifest.id.clone(),
+                    version: m.manifest.version.to_string(),
+                    titles: m.manifest.titles.clone(),
+                    psp_only: m.manifest.texture_pack.is_some(),
+                    network: m.manifest.network_races,
+                })
+                .collect(),
         }
-        oag_source::layers::register_mods(fallbacks);
     }
 
     /// The extras and whatever lies on the default search path, with the mods the player's

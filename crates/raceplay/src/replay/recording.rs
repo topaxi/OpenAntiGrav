@@ -17,13 +17,20 @@ pub(crate) struct ReplayState {
     /// The launch request this race was loaded with, which a recording of it carries in its
     /// header ([`Header::setup`]) so the file can rebuild the race.
     request: Option<oag_replay::header::Setup>,
+    /// The mods on for this race, which a recording of it carries in its header
+    /// ([`Header::active_mods`]).
+    active_mods: Vec<oag_replay::ActiveMod>,
 }
 
 impl ReplayState {
-    /// No recording, no ghost, and the request a recording will carry.
-    pub(crate) fn requested(request: Option<oag_replay::header::Setup>) -> Self {
+    /// No recording, no ghost, and the request and mods a recording will carry.
+    pub(crate) fn requested(
+        request: Option<oag_replay::header::Setup>,
+        active_mods: Vec<oag_replay::ActiveMod>,
+    ) -> Self {
         Self {
             request,
+            active_mods,
             ..Self::default()
         }
     }
@@ -94,6 +101,7 @@ impl Race {
             .collect();
         header.tick_rate = TickRate::DEFAULT.hz();
         header.setup = self.replay.request.clone();
+        header.active_mods = self.replay.active_mods.clone();
         let recorder = Recorder::new(header, self.core.sim.state_hash());
         let standing = self.core.player_standing();
         let mut track = PoseRecorder::new(usize::from(self.core.sim.ship_count()));
@@ -127,6 +135,12 @@ impl Race {
     pub fn stop_recording(&mut self) {
         self.replay.recording = None;
         self.replay.ghost = None;
+    }
+
+    /// The mods on for this race ([`Header::active_mods`]).
+    #[must_use]
+    pub fn active_mods(&self) -> &[oag_replay::ActiveMod] {
+        &self.replay.active_mods
     }
 
     /// Whether this race is being recorded.

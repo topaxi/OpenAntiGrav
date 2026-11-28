@@ -31,8 +31,8 @@
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use oag_assets::Archives;
 use oag_assets::layers::{Kind, Layer};
+use oag_assets::{Archives, Platform};
 use oag_title::Title;
 
 /// The environment variable that names the override directories outright: a
@@ -95,6 +95,35 @@ impl ModFallback {
     }
 }
 
+/// One enabled mod, for the list a recorded race carries (`oag_replay::ActiveMod`): every mod
+/// that is on, whether or not it holds any entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnabledMod {
+    /// The mod's id.
+    pub id: String,
+    /// The mod's release.
+    pub version: String,
+    /// The titles it is for, as [`slug`] spells them; empty is every title.
+    pub titles: Vec<String>,
+    /// Whether it is for a PSP source alone (a PPSSPP texture pack).
+    pub psp_only: bool,
+    /// Whether a LAN or online race mounts it: the mod's `[mod] network-races`.
+    pub network: bool,
+}
+
+impl EnabledMod {
+    /// Whether the mod is on for a race on any of `titles` from a source of `platform`.
+    #[must_use]
+    pub fn is_for(&self, titles: &[&Title], platform: Platform) -> bool {
+        (!self.psp_only || platform == Platform::Psp)
+            && (self.titles.is_empty()
+                || titles.iter().any(|title| {
+                    let slug = slug(title);
+                    self.titles.iter().any(|t| t.eq_ignore_ascii_case(&slug))
+                }))
+    }
+}
+
 /// What an open mounts around a title's archives besides the embedded fallback.
 #[derive(Debug, Clone, Default)]
 pub struct Layering {
@@ -102,6 +131,8 @@ pub struct Layering {
     pub overrides: Vec<PathBuf>,
     /// The enabled mods' entries, every title's; an open keeps its own title's.
     pub mods: Vec<ModFallback>,
+    /// Every enabled mod, entries or none, in load order.
+    pub enabled: Vec<EnabledMod>,
 }
 
 impl Layering {
@@ -110,18 +141,23 @@ impl Layering {
     #[must_use]
     pub fn for_network(mut self) -> Self {
         self.mods.retain(|m| m.network);
+        self.enabled.retain(|m| m.network);
         self
     }
 }
 
 impl Layering {
-    /// The player's layers: the override search path and the mods [`register_mods`]
-    /// last registered.
+    /// The player's layers: the override search path, the mods [`register_mods`]
+    /// last registered and the list [`register_enabled`] last was handed.
     #[must_use]
     pub fn player() -> Self {
         Self {
             overrides: overrides_search_path(),
             mods: registered_mods(),
+            enabled: ENABLED
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
         }
     }
 
@@ -145,6 +181,15 @@ impl Layering {
 }
 
 static MODS: RwLock<Vec<ModFallback>> = RwLock::new(Vec::new());
+static ENABLED: RwLock<Vec<EnabledMod>> = RwLock::new(Vec::new());
+
+/// Replaces the list of enabled mods every later [`Layering::player`] carries. Set by the
+/// composition root beside [`register_mods`], so a race records what its archives mounted.
+pub fn register_enabled(mods: Vec<EnabledMod>) {
+    *ENABLED
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = mods;
+}
 
 /// Replaces the enabled mods' entries every later [`Layering::player`] mounts. Set by the
 /// composition root at start and whenever a mod is switched on or off; nothing else writes it.

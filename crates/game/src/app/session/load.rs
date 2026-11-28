@@ -881,6 +881,9 @@ impl Session {
                         *watching,
                     ) {
                         Ok(active) => {
+                            if let Some(differ) = &active.mods_differ {
+                                self.notice = Some(super::shot_open::Notice::mods(differ));
+                            }
                             self.viewer = Some(active);
                             self.return_to_replays = false;
                             self.shot_pending = false;
@@ -1171,10 +1174,11 @@ impl Session {
                 }
                 // A recording that would not load is listed dimmed with why.
                 if self.shot_pending {
-                    self.shot_failed(&format!("{e:#}"));
+                    self.shot_failed(&oag_raceplay::ModsDiffer::or_chain(&e));
                     self.watching = None;
                 } else if let Some(watching) = self.watching.take() {
-                    self.replay_refused.insert(watching.path, format!("{e:#}"));
+                    self.replay_refused
+                        .insert(watching.path, crate::replays::page::refusal(&e));
                 }
                 return self.open_menus();
             }

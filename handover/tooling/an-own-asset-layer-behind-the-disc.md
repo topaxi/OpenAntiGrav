@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-27
-summary: "Record active mods in the replay header; override forms beyond a loose name"
+updated: 2026-11-28
+summary: "Override forms beyond a loose name; records and ghosts of a modded race await the maintainer's call"
 size: S (45)
 difficulty: medium (35)
 ---
@@ -15,10 +15,16 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
 
 ## Open
 
-- **A mod must be recorded.** The replay's state hashes already turn a modded table into a
-  reported desync, but the replay header does not say that mods were active, and a record or
-  a ghost lap set on a modded race is stored like any other. Decide: a `mods` flag in
-  `oag_replay::Header`, and whether records refuse a modded race.
+- **Records and ghosts of a modded race (maintainer's call).** Replay and ghost headers list the
+  active mods (`docs/formats/replay-file.md`, "Active mods"); `records.toml` does not, and a ghost
+  set with a data mod on replaces the vanilla one. Options: (a) tag only, add the list to the
+  record row; (b) keep apart per race-changing mod set; (c) refuse. Recommended: (a) for data
+  mods, which cannot change what a disc race reads, and (b) for simulation modules, which
+  `docs/architecture/wasm-extensions/README.md` 4.4 already prescribes (a separate modded table)
+  and nothing builds: their results file into the normal rows today (read in the code, not run:
+  the finish and exit captures gate on demo, seed, pose and `--give` alone). Whether a mod's pilots change
+  an opponent field enough to matter for a record was not checked.
+- **The mods refusal is English only** on the REPLAYS row and in the viewer's notice.
 - **Override forms beyond a loose name.** No hash-addressed override (`read_hash` skips both
   layers, so an unmined entry cannot be replaced) and no whole-archive mount. A PS2 model's
   texture set, found by directory position, does not follow a model override.
@@ -36,6 +42,7 @@ census and wiring: [`docs/architecture/asset-layers.md`](../../docs/architecture
 
 ## Next Steps
 
-1. Header flag for active mods, and the records decision. 1-2 hours.
+1. The records and ghosts decision above, then build it: tag only 1 hour, a separate table with a
+   RECORDS page switch half a day.
 2. Move the PromptFont glyphs and cursors into the layer if the maintainer wants one report
    line for every stand-in. 1 hour.

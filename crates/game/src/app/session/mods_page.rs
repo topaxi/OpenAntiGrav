@@ -26,7 +26,7 @@ pub(crate) type Rebuilt = (
     menu::Definition,
     Vec<mods::Listing>,
     crate::campaign::custom::Installed,
-    Vec<oag_source::layers::ModFallback>,
+    mods::ForLoads,
 );
 
 /// A rebuild's inputs, owned.
