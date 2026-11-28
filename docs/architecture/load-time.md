@@ -490,6 +490,36 @@ of the `cargo nextest run`, two interleaved rounds, load 50 to 80):
 | `campaign_cursor_ground_truth` (33 tests) | 1,753 G, 1,755 G; 60.5 s, 70.3 s wall | 1,141 G, 1,159 G; 42.1 s, 42.1 s wall (-35 % instructions) |
 | `footer_hint_ground_truth` (14 tests) | 671 G, 677 G | 545 G, 552 G (-19 %) |
 
+**The last per-choice launches (2026-11-28).** The footer-hint tests for Cell
+Selection, photo mode and Pure's race page now launch once. Cell Selection reads the
+campaign cursor, so its script puts the cursor back and `expect`s it before leaving;
+photo mode switches the choice inside one race. The Pulse PS2 photo-and-viewer pair
+(`..._under_original`, `..._under_circle`) became one test,
+`pulse_ps2_photo_mode_and_viewer_leave_on_the_resolved_button`: one race launch and
+one viewer launch for both choices, the viewer booting on the choice the race saved
+last (so that one is still read from `settings.toml`; photo mode now reaches `circle`
+only through `config`, and `boots_under_menu_back` covers the boot read). Both builds
+of the test binary run directly, six interleaved pairs, `--test-threads=4`, load 4 to
+20 (24 threads), medians; summed is the per-test seconds of `--report-time`, what the
+`gpu-vram` group adds up:
+
+| Module | User CPU | Wall | Summed |
+| --- | ---: | ---: | ---: |
+| `footer_hint_ground_truth` (14 tests) | 23.4 -> 20.5 s (-12 %) | 6.66 -> 6.72 s | 21.9 -> 19.3 s |
+| `campaign_cursor_ground_truth` (37 -> 36 tests) | 52.4 -> 48.9 s (-7 %) | 21.2 -> 20.5 s | 61.2 -> 57.9 s |
+
+Per test: Cell Selection 1.24 -> 0.70 s, photo-mode hints 4.23 -> 2.18 s, Pure race
+page 0.59 -> 0.31 s, the PS2 photo-and-viewer pair 8.37 -> 5.36 s. Together that is
+about 6 s of a group that summed to 1,788 s in the selection `gate-wall-time.md`
+measured: no gate hold moves visibly. Neither module's wall clock moves much, its
+slowest tests being elsewhere.
+
+```sh
+cargo test -p oag-game --test it_a_g --no-run   # keep a copy of the binary before the edit
+OAG_REQUIRE_GAME_DATA=1 RUSTC_BOOTSTRAP=1 /usr/bin/time -f '%U %e' <it_a_g> \
+  --ignored footer_hint_ground_truth:: --test-threads=4 -Z unstable-options --report-time
+```
+
 **PS2 music under `--no-audio`, read and not changed.** The 36 % of a PS2 launch
 is the CHD's LZMA hunks of `PS2MUSIC.WAD`, read to build a `Sound` whose length
 the null mixer still advances a song by (the marquee shows each race song once).
