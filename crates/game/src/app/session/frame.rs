@@ -1173,7 +1173,7 @@ impl Session {
                 // See `super::tournament::record_finished_leg`'s own doc
                 // for why this is a plain function taking `stage` rather
                 // than a `Session` method.
-                super::tournament::record_finished_leg(&mut self.tournament, stage);
+                super::tournament::record_finished_leg(stage);
                 let observation = stage.observation();
                 // Read before `self.records.record` below folds `observation`
                 // into the row: `PersonalBest::compare` wants the row as it

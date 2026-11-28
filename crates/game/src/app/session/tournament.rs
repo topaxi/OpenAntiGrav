@@ -1,43 +1,26 @@
-//! Session-level Tournament bookkeeping: folding a finished leg into
-//! [`Session::tournament`]'s own running standings, continuing to the next
-//! one, and discarding it once its `EndRace Menu` is left. The points law
-//! and the leg list themselves are `oag_raceplay::tournament::Progress`'s -
-//! this module only drives it against the rest of the session, the same
-//! split `crate::app::session::campaign`/`crate::app::session::endrace`
-//! already make for the screens either owns.
+//! Session-level Tournament bookkeeping: folding a finished leg into its run's running
+//! standings (`RunContext::tournament`), and continuing to the next one. The points law and the
+//! leg list themselves are `oag_raceplay::tournament::Progress`'s; this module only drives it
+//! against the rest of the session. A tournament ends with its run (ADR-0099).
 
 use log::warn;
 
 use crate::app::race_stage::RaceStage;
-use oag_raceplay::tournament::Progress;
 
 use super::Session;
 
-/// Folds the leg that just finished into `tournament`'s own running
-/// standings, and - only once every leg has run - carries the resulting
-/// standings rank into `stage.tournament_final_rank` for
+/// Folds the leg that just finished into its run's running standings, and - only once every
+/// leg has run - carries the resulting standings rank into `stage.tournament_final_rank` for
 /// `RaceStage::campaign_medal` to read.
 ///
-/// **A plain function, not a `Session` method**, because its one caller
-/// (`Session::frame`'s finish-transition guard) already holds `stage` as a
-/// `&mut` borrow of `self.stage` at the point this needs to run - a method
-/// taking `&mut self` there would conflict with that live borrow even
-/// though the two touch disjoint fields, since the compiler cannot see
-/// through the method call to know `Session::record_tournament_leg` never
-/// touches `self.stage` itself. Two plain, disjoint references sidestep
-/// that entirely.
-///
-/// A no-op outside a Tournament cell (`tournament` is `None`) and before
-/// the leg has a board to read. Idempotent by construction:
-/// `Progress::record_leg` overwrites rather than accumulates, so a caller
-/// that lands here twice for the same leg - the finish transition this
-/// runs from is itself guarded by `RaceStage::result_saved`, but nothing
-/// here relies on that guard holding - scores it once either way.
-pub(crate) fn record_finished_leg(tournament: &mut Option<Progress>, stage: &mut RaceStage) {
+/// A no-op outside a Tournament cell (the run has no `tournament`) and before the leg has a
+/// board to read. Idempotent by construction: `Progress::record_leg` overwrites rather than
+/// accumulates, so a caller that lands here twice for the same leg scores it once either way.
+pub(crate) fn record_finished_leg(stage: &mut RaceStage) {
     let Some(board) = stage.race.core.results() else {
         return;
     };
-    let Some(progress) = tournament.as_mut() else {
+    let Some(progress) = stage.run.tournament.as_mut() else {
         return;
     };
     progress.record_leg(board);
@@ -51,12 +34,12 @@ impl Session {
     /// `RACE AGAIN` - a tournament with a leg still to race.
     #[must_use]
     pub(crate) fn tournament_has_next_leg(&self) -> bool {
-        self.tournament
-            .as_ref()
+        self.current_run()
+            .and_then(|run| run.tournament.as_ref())
             .is_some_and(|progress| !progress.is_last_leg())
     }
 
-    /// `ER_NEXT_RACE`: advances `self.tournament` to its next leg and
+    /// `ER_NEXT_RACE`: advances the finished leg's run to its next leg and
     /// relaunches - `Tournament_AdvanceLeg`'s own effect, reproduced through
     /// this project's existing relaunch machinery rather than a parallel
     /// path of its own, the same choice `MenuOption::RaceAgain` already
@@ -64,7 +47,10 @@ impl Session {
     pub(crate) fn advance_tournament_leg(&mut self) {
         // The finished leg's run again, as `RaceAgain` relaunches it (ADR-0099).
         self.rerun_race_on_screen();
-        let Some(progress) = self.tournament.as_mut() else {
+        let Some(run) = self.run.as_mut() else {
+            return;
+        };
+        let Some(progress) = run.tournament.as_mut() else {
             warn!("ER_NEXT_RACE pressed with no tournament in progress - ignoring");
             return;
         };
@@ -76,19 +62,10 @@ impl Session {
             warn!("the next leg names no track - cannot continue the tournament");
             return;
         };
-        let Some(options) = self.run.as_mut().and_then(|run| run.options.as_mut()) else {
+        let Some(options) = run.options.as_mut() else {
             return;
         };
         options.track = Some(track);
         self.finish_launch();
-    }
-
-    /// Discards `self.tournament` - called wherever an EndRace `Return`
-    /// option leaves the flow, whether the tournament finished or was
-    /// abandoned mid-way, on backing out of its Team Selection and when a
-    /// leg's race fails to load. See [`Session::tournament`]'s own doc for why
-    /// there is nothing to save.
-    pub(crate) fn abandon_tournament(&mut self) {
-        self.tournament = None;
     }
 }

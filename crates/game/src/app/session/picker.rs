@@ -807,13 +807,10 @@ impl Session {
                 // track outright - so this reopens `Grid Selection` instead
                 // and drops the abandoned cell rather than let it leak into
                 // whatever race is launched next.
+                // The run ends here, a Tournament cell's legs with it, or the RACE page's next
+                // launch would run as that tournament's first leg.
                 let run = self.end_run().unwrap_or_default();
                 let difficulty = run.campaign_difficulty;
-                // A Tournament cell set up its legs before this screen
-                // opened (`Session::launch_campaign_cell`); backing out
-                // abandons them, or the RACE page's next launch would run
-                // as that tournament's first leg.
-                self.abandon_tournament();
                 // Wipeout HD/Fury's `TeamRedirectBack` authors no `goto`, so
                 // its Back returns to the screen `Team Selection` came from:
                 // `Cell Selection`, on the same cell and rung. Pulse keeps

@@ -1174,14 +1174,12 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
-                // A Tournament leg that would not load ends the tournament: the leg's launch
-                // facts went with the loading stage, and standings left behind would offer
-                // NEXT RACE after the next unrelated race (`docs/architecture/navigation-map.md`,
-                // "A leg that will not load").
-                self.abandon_tournament();
                 // The run ends with its load: a relaunch has nothing to continue from, and its
-                // snapshotted options must not stand in for the next launch's. What a mod
-                // campaign event replaced in the menus' options goes back first.
+                // snapshotted options must not stand in for the next launch's. A Tournament
+                // leg's standings go with it, which would otherwise offer NEXT RACE after the
+                // next unrelated race (`docs/architecture/navigation-map.md`, "A leg that will
+                // not load"). What a mod campaign event replaced in the menus' options goes
+                // back first.
                 self.end_run();
                 // A benchmark that would not load gives the player's own run back.
                 self.abandon_benchmark_launch();

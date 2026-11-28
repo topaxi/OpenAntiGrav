@@ -43,6 +43,11 @@ pub(crate) struct RunContext {
     pub(crate) pending_event: Option<String>,
     /// The card that event was launched from, which the race load draws behind its box.
     pub(crate) pending_card: Option<oag_ui::frontend::LaunchedCard>,
+    /// A Tournament cell's leg list and running standings (`race::tournament::Progress`), from
+    /// the cell's launch until its run ends: its last leg's `EndRace Menu` left, a leg that will
+    /// not load, Team Selection backed out of, or any other launch. Each leg's relaunch carries
+    /// it on; nothing saves it past the run (no `Tournament_SaveProgress`/`_LoadProgress`).
+    pub(crate) tournament: Option<race::tournament::Progress>,
 }
 
 /// The race options a mod campaign event replaces: a cross-disc event's
@@ -58,12 +63,21 @@ impl crate::app::session::Session {
     /// The options of the race on screen, or else of the one being launched: its run's
     /// snapshot, else the menus' own (a watched recording takes no snapshot).
     pub(crate) fn race_options_now(&self) -> Option<&race::Options> {
-        let run = match &self.stage {
-            crate::app::stage::Stage::Race(stage) => Some(&stage.run),
-            _ => self.run.as_ref(),
-        };
-        run.and_then(|run| run.options.as_ref())
+        self.current_run()
+            .and_then(|run| run.options.as_ref())
             .or(self.race_options.as_ref())
+    }
+
+    /// The run of the race on screen, else the one being launched, else the race parked behind
+    /// the menus'.
+    pub(crate) fn current_run(&self) -> Option<&RunContext> {
+        match &self.stage {
+            crate::app::stage::Stage::Race(stage) => Some(&stage.run),
+            _ => self
+                .run
+                .as_ref()
+                .or(self.suspended_race.as_ref().map(|stage| &stage.run)),
+        }
     }
 
     /// The campaign cell of the run being launched.

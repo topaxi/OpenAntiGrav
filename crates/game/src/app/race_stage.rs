@@ -111,20 +111,18 @@ pub(crate) struct RaceStage {
     /// The title this race runs, for the law its campaign cell's medal is read with
     /// ([`oag_title::Campaign::counting_modes`]).
     pub(crate) title: &'static oag_title::Title,
-    /// The final standings rank this leg earns against
-    /// [`Session::tournament`], or `None` on every leg but a Tournament
-    /// cell's own last one - see that field's own doc.
+    /// The final standings rank this leg earns against its run's tournament
+    /// (`RunContext::tournament`), or `None` on every leg but a Tournament
+    /// cell's own last one.
     ///
-    /// **Read by [`RaceStage::campaign_medal`] alone**, and drained from
-    /// `Session::tournament` at the same finish-transition
+    /// **Read by [`RaceStage::campaign_medal`] alone**, and read off the run's
+    /// standings at the same finish-transition
     /// (`Session::frame`'s `result_saved` guard) that
     /// `RaceStage::observation` is next built from - the mirror of
     /// the run's campaign cell's "moved once, read once" shape, except
     /// this is written *after* the stage already exists rather than at
     /// build time, because the rank is not known until the leg itself
     /// finishes.
-    ///
-    /// [`Session::tournament`]: crate::app::session::Session::tournament
     pub(crate) tournament_final_rank: Option<u8>,
     /// Whether a window of this frame has already drawn, and so did the frame's
     /// camera-independent work (`Scene::render_window`'s `shared`). Cleared once a frame by

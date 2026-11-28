@@ -265,8 +265,8 @@ impl Session {
         if let Some(run) = self.run.as_mut() {
             run.campaign_difficulty = None;
             run.campaign_ai_skill_scale = None;
+            run.tournament = None;
         }
-        self.abandon_tournament();
         self.open_track_picker();
     }
 

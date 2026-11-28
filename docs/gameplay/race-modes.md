@@ -1478,10 +1478,10 @@ onward) scored as one event:
 - **Save/resume between legs** (`Tournament_SaveProgress`/
   `Tournament_LoadProgress`, the mechanism behind `MSC_EVENT_TOURN`'s own
   "you can also save your tournament progress between races" and the
-  `MSC_MSG_AUTOSAVE3` dialog) is not implemented. `Session::tournament`
-  is discarded the moment its `EndRace Menu` is left by any option,
-  whether the tournament finished or was abandoned mid-way - there is
-  nothing to resume.
+  `MSC_MSG_AUTOSAVE3` dialog) is not implemented. The standings live on
+  the tournament's run (`RunContext::tournament`, ADR-0099) and end with it:
+  the moment its `EndRace Menu` is left by any option, whether the
+  tournament finished or was abandoned mid-way - there is nothing to resume.
 - **The authored `EndRace Results` standings table**
   (`EndRaceResults_PopulateTournamentTable`'s own `PRO_POS`/`ER_TEAM`/
   `ER_POINTS` columns, `Line1` = `ER_RACE_STAN`, `BigTopText` =

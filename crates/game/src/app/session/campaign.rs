@@ -719,11 +719,7 @@ impl Session {
                 });
         run.campaign_difficulty = difficulty;
         run.campaign_ai_skill_scale = ai_skill_scale;
-        // `None` for every ordinary cell, clearing whatever a previous
-        // tournament (finished or abandoned) left behind - see
-        // `Self::tournament`'s own doc for why nothing else has to clear it
-        // on this path.
-        self.tournament =
+        run.tournament =
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.pure_chain = None;

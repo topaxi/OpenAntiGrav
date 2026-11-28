@@ -102,7 +102,7 @@ directly.
 | Trigger | Chain | Writes first |
 | --- | --- | --- |
 | RACE page START | `start_race_box` (`menus.rs:530`) -> pickers -> `launch_from_settings` (`menus.rs:665`) -> `finish_launch` | `start_race_box` and `launch_from_settings` end the pending run (`Session::end_run`); `launch_from_settings` rebuilds `race_options` |
-| campaign cell | `handle_campaign` -> `launch_campaign_cell` (`campaign.rs:524`) -> `launch_campaign_race` -> `finish_launch` | `race_options`, a fresh `run` with `campaign_cell`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_home` for a mod event; `tournament` |
+| campaign cell | `handle_campaign` -> `launch_campaign_cell` (`campaign.rs:524`) -> `launch_campaign_race` -> `finish_launch` | `race_options`, a fresh `run` with `campaign_cell`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_home` for a mod event, `tournament` for a Tournament cell |
 | 2048 event | `follow_launch` (`launch2048.rs:24`) -> `launch_race` | a fresh `run` with `pending_event` and `pending_card`; a tier cell sets the run's `campaign_add_on` |
 | attract demo | `launch_demo` (`demo.rs:168`) | moves the player's `run` into `demo.saved` and launches a run of its own whose `options` are the demo's; `race_options` untouched |
 | benchmark | `launch_benchmark` (`benchmark.rs:244`) | moves the player's `run` and autopilot fields into `benchmark.saved`, launches a run of its own; `race_options` untouched |
@@ -141,8 +141,8 @@ exist only while that race is `Session::stage`. `handle_endrace_menu_option`
 
 | Option | Chain | Carried | Dropped |
 | --- | --- | --- | --- |
-| RACE AGAIN | clones the race's run into `Session::run` (`rerun_race_on_screen`), `finish_launch` | the run (options and `campaign_*`), `tournament` | the finished race |
-| NEXT RACE | `advance_tournament_leg`: the same clone, `Progress::advance`, the run's `options.track`, `finish_launch` | the run, `tournament` with its standings | the finished leg |
+| RACE AGAIN | clones the race's run into `Session::run` (`rerun_race_on_screen`), `finish_launch` | the run (options, `campaign_*`, `tournament`) | the finished race |
+| NEXT RACE | `advance_tournament_leg`: the same clone, `Progress::advance`, the run's `options.track`, `finish_launch` | the run, its `tournament` standings advanced | the finished leg |
 | RETURN TO GRID | `return_to_campaign` -> `leave_finished_race` -> `reopen_cell_selection` | the cell name | the race, `tournament` |
 | RETURN TO MENU | `leave_finished_race` (`endrace.rs:681`) -> `open_menus` (-> `reenter_multiplayer` for two people) | the split lobby | the race, `tournament` |
 | WATCH REPLAY | `watch_last_race` (`replays.rs:335`) -> `watch_path` -> `start_watching` -> `start_race_loading` | the recording's path | **the finished race and its end screens** (see below) |
@@ -164,14 +164,14 @@ page and nothing else.
 ### Campaign and tournament
 
 Grid, Cell Selection and Pure's chain are `MenuStage` screens (layer 2); a
-cell's race is an ordinary race start. A Tournament cell differs only in
-`Session::tournament`, a `race::tournament::Progress` created at
-`campaign.rs:711` and the one launch fact that outlives a race:
-`record_finished_leg` (`tournament.rs:37`, called from `frame.rs:1176`) folds
-each leg's board into it, `tournament_has_next_leg` (`tournament.rs:54`) turns
-RACE AGAIN into NEXT RACE, and `abandon_tournament` (`tournament.rs:111`) drops
-it. Its four callers: `leave_finished_race`, `handle_picker`'s Back out of Team
-Selection (`picker.rs:816`), `leave_shared` (`picker/seat.rs:259`) and
+cell's race is an ordinary race start. A Tournament cell differs only in its
+run's `tournament` (`RunContext::tournament`, ADR-0099 migration step 2), a
+`race::tournament::Progress` created by `launch_campaign_cell`.
+`record_finished_leg` (called from `frame`) folds each leg's board into the
+race's run, `tournament_has_next_leg` turns RACE AGAIN into NEXT RACE, and NEXT
+RACE carries the run on to the next leg. It ends with its run: the finished
+race dropped when its end menu is left, Back out of Team Selection
+(`end_run`), any RACE-page, keyed or 2048 launch (`end_run`), and
 `finish_race_loading`'s failed-load arm (see "A leg that will not load").
 
 ### Network
@@ -194,9 +194,8 @@ unless the flow saved it by hand.
 | `parked_menu` | `open_hosted_map` | 2048 only; one deep |
 | `return_to_replays` | `watch_path`, `leave_viewer`, the viewer's open | a bool for one return target |
 | `race_options` | boot, `launch_from_settings`, campaign launch, launch keys, `restore_campaign_home` | the RACE page's options and a campaign's still share one slot; a launch snapshots it into its run (`RunContext::options`), so a relaunch, a demo and a benchmark no longer write it |
-| `run` (`RunContext`: `options`, `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_add_on`, `campaign_home`, `pending_event`, `pending_card`) | campaign launch, 2048 launch, `launch_race`'s snapshot, RACE AGAIN, NEXT RACE, RESTART, demo, benchmark; ended by a RACE-page or keyed launch and a failed load | moved into the race at build (ADR-0099 migration step 1); RACE AGAIN, NEXT RACE and RESTART clone it back from the race |
+| `run` (`RunContext`: `options`, `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_add_on`, `campaign_home`, `pending_event`, `pending_card`, `tournament`) | campaign launch, 2048 launch, `launch_race`'s snapshot, RACE AGAIN, NEXT RACE, RESTART, demo, benchmark; ended by a RACE-page or keyed launch and a failed load | moved into the race at build (ADR-0099 migration steps 1 and 2); RACE AGAIN, NEXT RACE and RESTART clone it back from the race; a Tournament's standings end with it |
 | `campaign_home` (on the run) | a mod campaign event | `open_menus` restores `race_options`' source, craft source and difficulty from the pending run's or the race on screen's, on every return, whatever the return is for |
-| `tournament` | Tournament cell launch | outlives every race by design; cleared only at the four sites above |
 | `watching`, `viewer` | replay watch | `watching` is also how `advance_race_build` knows the race is for the viewer |
 | `demo.saved`, `benchmark.saved` | demo, benchmark | the player's pending run moved aside (and the benchmark's settings and autopilot): a push and pop without a stack |
 | `net`, `lan` | LAN, online | dropped by every `open_menus` |
@@ -220,70 +219,50 @@ intact.
 `tournament_next_leg` is set (`endrace.rs:423` in the session). On a Tournament's
 last leg the row is offered. The trace below is what the guard prevents.
 
-1. **Launch.** `launch_campaign_cell` writes `race_options`, `campaign_cell`,
-   `campaign_difficulty`, `campaign_ai_skill_scale` and
-   `tournament = Some(Progress)`. `advance_race_build` drains the four
-   `campaign_*` slots into the leg's `RaceStage`.
-2. **The leg finishes.** `record_finished_leg` folds the board into
-   `Session::tournament`. The end menu is built with NEXT RACE.
+1. **Launch.** `launch_campaign_cell` writes `race_options` and a fresh run with
+   `campaign_cell`, `campaign_difficulty`, `campaign_ai_skill_scale` and
+   `tournament = Some(Progress)`. `advance_race_build` moves the run into the
+   leg's `RaceStage`.
+2. **The leg finishes.** `record_finished_leg` folds the board into the race's
+   run. The end menu is built with NEXT RACE.
 3. **WATCH REPLAY.** `watch_last_race` writes the recording, then
    `start_watching` drops `suspended_race` and calls `start_race_loading`, whose
-   `self.stage = Stage::race_loading(...)` (`load.rs:739`) **drops the finished
-   leg's `RaceStage`**. Lost with it: `campaign_cell`, `campaign_difficulty`,
-   `campaign_ai_skill_scale`, `campaign_custom`, `tournament_final_rank` and the
-   end screens with their cursor. This is the first and decisive loss:
-   `advance_tournament_leg` reads the four `campaign_*` values back from
-   `Stage::Race` (`tournament.rs:75`), so after this point NEXT RACE would launch
-   the next leg with no cell, no medal and the ambient AI scale.
-4. **The viewer's race builds.** `campaign_cell` on `Session` is already `None`
-   (drained in step 1), so the viewer's race carries no campaign facts.
+   `self.stage = Stage::race_loading(...)` **drops the finished leg's
+   `RaceStage`**, and its run with it: the cell, rung, skill scale, custom
+   launch, the standings, `tournament_final_rank` and the end screens with
+   their cursor. NEXT RACE clones the run from `Stage::Race`, so after this
+   point there is nothing to continue from.
+4. **The viewer's race builds** with no run of the tournament's.
 5. **EXIT.** `leave_viewer` sets `return_to_replays` and calls `open_menus`.
-   `open_menus` runs `restore_campaign_home` (`menus.rs:147`), which resets
-   `race_options`' source, craft source and difficulty when the cell was a mod
-   campaign event. The viewer's race is not parked. The REPLAYS page is pushed.
-   There is no path back to an end menu: it existed only on the dropped race.
-6. **The standings survive, orphaned.** `Session::tournament` is still `Some`:
-   only `leave_finished_race`, `handle_picker` and `leave_shared` clear it, and
-   this path runs none of them. The standings are intact; everything needed to
-   continue them is gone.
+   The viewer's race is not parked. The REPLAYS page is pushed. There is no
+   path back to an end menu: it existed only on the dropped race.
 
-So the tournament context is split in two. The standings (`Progress`) sit on
-`Session` and survive. The leg context (cell, difficulty, skill scale, custom
-launch, final rank, the end screens) sits on the finished `RaceStage` and dies
-at the first `self.stage =` that replaces it. A fix has to keep the second
-alive behind the viewer, not just the first.
+Since ADR-0099's migration step 2 the whole tournament (standings and leg
+context) sits on the run, so it lives or dies in one piece. A fix has to keep
+the finished race, and so its run, alive behind the viewer (migration steps 3
+and 4).
 
 ### A leg that will not load
 
-A leg whose load fails takes `finish_race_loading`'s error arm, which calls
-`abandon_tournament` and then `open_menus`. The leg's launch facts went with the
-loading stage, so there is nothing to continue from: the tournament ends and its
-standings are dropped. The arm clears it for every failed load: by reading, no
-other load happens while a tournament has legs to go (WATCH REPLAY is refused
-mid-tournament, and a paused leg's menus offer no launch).
+A leg whose load fails takes `finish_race_loading`'s error arm, which ends the
+run (`end_run`) and then calls `open_menus`. The leg's run is still the pending
+one on `Session` (the race build never took it), so the tournament ends with it
+and its standings are dropped.
 
-Without that call the standings outlived the leg. Observed on Pulse PSP EU with a
+Without that the standings outlived the leg. Observed on Pulse PSP EU with a
 two-leg mod Tournament whose first circuit was broken by an override: the next
 RACE-page race's end menu led with NEXT RACE, offered no RACE AGAIN and no WATCH
 REPLAY, and confirming it loaded the tournament's second circuit.
 `drive_ground_truth::tournament` drives that flow and reads the `tournament` key
-of the drive state.
-
-`launch_from_settings` and `launch_keyed` (the two menu launch funnels) still do
-not clear `tournament`; ADR-0099's migration step 2 (a run owns it, and ending
-the run drops it) is where that becomes one place. This failed-load case is the
-only part of that step built.
+of the drive state (the run on screen's, else the pending run's, else the
+parked race's). Without the arm's `end_run` it fails on the menus the failed
+load returns to (`tournament` reads `1/2`).
 
 **A second failure path is unverified.** `finish_launch` only logs a synchronous
 `launch_race` error. After NEXT RACE that would leave the finished leg on screen
-with `Progress` already advanced; no way to make it happen was found, and
-RETURN TO MENUS from there clears the tournament.
+with the pending run's `Progress` advanced and the race's own not; no way to
+make it happen was found, and RETURN TO MENUS from there drops the race's run.
 
-**The last leg leaves it set, harmlessly.** WATCH REPLAY is offered on a
-Tournament's last leg, and that path (`start_watching`, `leave_viewer`,
-`open_menus`) never calls `abandon_tournament`. With every leg run,
-`tournament_has_next_leg` is false, the standings table is chosen by the race's
-mode, not by `tournament` (`endrace.rs:260` in the session), and the medal reads
-`tournament_final_rank` only for a Tournament cell, whose launch replaces
-`tournament`. So the leftover `Progress` is overwritten by the next RACE-page
-race's board (`record_leg` overwrites the current leg) and nothing shows it.
+**The last leg no longer leaves it set.** WATCH REPLAY is offered on a
+Tournament's last leg; the watch's load drops the finished race and its run, so
+the standings go with them (by construction, ADR-0099 migration step 2).

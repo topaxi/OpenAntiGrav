@@ -693,7 +693,6 @@ impl App {
             mp_devices: Vec::new(),
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
-            tournament: None,
             run: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt

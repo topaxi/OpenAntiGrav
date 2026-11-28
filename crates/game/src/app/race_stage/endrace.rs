@@ -686,7 +686,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// `docs/formats/endrace-screens.md`'s numbered populate list.
 /// `ER_SAVE_QUIT` (mid-Tournament save-and-quit) never appears: this engine
 /// implements no `Tournament_SaveProgress`/`_LoadProgress` -
-/// `Session::tournament`'s own doc says why. `ER_SAVE_GHOST`/`MSC_DEL_DATA`
+/// `RunContext::tournament`'s own doc says why. `ER_SAVE_GHOST`/`MSC_DEL_DATA`
 /// never appear either - see `oag_ui_screens::endrace`'s own module doc for why.
 ///
 /// **`tournament_next_leg`**: `true` on every leg but a Tournament cell's

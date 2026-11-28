@@ -243,7 +243,7 @@ impl Session {
             })
         };
 
-        // A Tournament leg's own standings, off `self.tournament` (already
+        // A Tournament leg's own standings, off its run's `tournament` (already
         // folded with this leg's own points -
         // `Session::record_finished_leg` runs before `build_endrace` in the
         // same frame, see `tournament_results`'s own doc) and this leg's
@@ -259,7 +259,7 @@ impl Session {
             && team.is_some())
         .then_some(roster);
         let pulse_tournament = (!is_hd && mode == oag_race::Mode::Tournament)
-            .then_some(self.tournament.as_ref())
+            .then(|| self.current_run().and_then(|run| run.tournament.as_ref()))
             .flatten()
             .and_then(|progress| {
                 tournament_results(
@@ -666,12 +666,8 @@ impl Session {
             &self.stage,
             Stage::Race(stage) if stage.race.view_state().viewport_count() >= 2 && stage.run.campaign_cell.is_none()
         );
-        // Whether the tournament just finished its last leg or is being
-        // abandoned early, there is nothing to carry past this point - see
-        // `Session::tournament`'s own doc for why this engine parks no
-        // save/resume state the way the original's `Tournament_SaveProgress`
-        // does.
-        self.abandon_tournament();
+        // Whether the tournament just finished its last leg or is being abandoned early, it
+        // ends with its run, which goes with the race (`RunContext::tournament`).
         self.audio.pause_race_music();
         self.save_race_music();
         self.audio.stop_race_sfx();
