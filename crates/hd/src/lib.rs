@@ -231,6 +231,7 @@ pub const TITLE: &Title = &Title {
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    launcher_card: None,
     cursor: include_str!("../../../assets/cursors/hd.svg"),
     // Built 2026-09-04: the craft render into a coverage map the track samples.
     original_shadows: oag_title::shadow::OriginalShadows::Built,

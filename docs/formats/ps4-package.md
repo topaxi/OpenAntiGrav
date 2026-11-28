@@ -92,7 +92,7 @@ row's second word is an offset into it. Read on both Omega packages
 `ICON0.PNG` inside the trophy set (entry `0x1400`, `trophy/trophy00.trp`), the
 trophy list's own icon.
 `oag_disc::ps4_pkg::header::header_entry` reads one entry; the
-[title chooser](../ui/launcher.md) offers `pic0` then `pic1`. An unpacked folder
+[title chooser](../ui/launcher.md) draws `pic0`, else `pic1`. An unpacked folder
 does not keep them, so for one the chooser looks for a base package on the
 search path whose `content_id` holds `WIPEOUTOMEGA`
 (`EP9000-CUSA05670_00-WIPEOUTOMEGA00EU` on this European one; no other region's

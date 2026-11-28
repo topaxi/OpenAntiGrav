@@ -781,6 +781,6 @@ OAG_FFMPEG_UNPACKING = { text = "UNPACKING FFMPEG...", human = false }
 OAG_LAUNCHER_CHOOSE = { text = "CHOOSE A GAME", human = false }
 OAG_LAUNCHER_MOVE = { text = "ARROWS CHOOSE", human = false }
 OAG_LAUNCHER_START = { text = "ENTER OR X START", human = false }
-OAG_LAUNCHER_PICTURE = { text = "C OR SQUARE NEXT PICTURE", human = false }
+OAG_LAUNCHER_PICTURE = { text = "C OR SQUARE NEXT IMAGE", human = false }
 OAG_LAUNCHER_QUIT = { text = "ESCAPE QUIT", human = false }
 OAG_LAUNCHER_ENCRYPTED = { text = "ENCRYPTED - ENTER ITS DISC KEY", human = false }

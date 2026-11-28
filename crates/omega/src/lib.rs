@@ -213,6 +213,7 @@ pub const TITLE: &Title = &Title {
     // HD's screen re-spelt for `.gnf`, off the executable's own string run (`loading`).
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    launcher_card: None,
     cursor: include_str!("../../../assets/cursors/omega.svg"),
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,

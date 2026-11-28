@@ -112,6 +112,10 @@ pub const TITLE: &Title = &Title {
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    launcher_card: Some(oag_title::launcher_card::LauncherCard {
+        logo: names::LOGO_IMAGE,
+        backdrop: movies::BACKDROP_CUTS,
+    }),
     cursor: include_str!("../../../assets/cursors/pulse.svg"),
     // Built 2026-09-04: the craft's own `Dynamic Shadow Occluder` hull, projected on the road.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
@@ -560,6 +564,8 @@ pub mod names {
     /// The front-end root: every boot screen, the `FEGlobals` variables, and
     /// the `LoadXML` list that pulls in the rest of the menus.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
+    /// The `wipEout PULSE` logo the title screen draws; its texels are PSP pixels.
+    pub const LOGO_IMAGE: &str = r"Data\FE\Images\pulse_logo.mip";
     /// The footer ticker's message list: 124 `PI_News` rows on PSP, 121 on PS2 (no `TKR_FYISL`
     /// or `TKR_FYIZONE`). See `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The
     /// footer ticker's message choice".

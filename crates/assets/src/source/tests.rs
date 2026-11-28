@@ -302,6 +302,7 @@ const TITLE: &Title = &Title {
     // This crate opens archives; nothing here draws a loading screen.
     loading: None,
     music: None,
+    launcher_card: None,
     cursor: "",
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,

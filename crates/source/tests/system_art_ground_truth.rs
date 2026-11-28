@@ -41,8 +41,8 @@ fn every_pressing_offers_the_art_its_platform_keeps() {
         ("pure-psp-eu.chd", psp.clone()),
         ("pure-psp-usa.chd", psp),
         ("hdfury-ps3-eu-dec.iso", ps3.clone()),
-        // A PS2 disc has no system art.
-        ("pulse-ps2-eu.chd", Vec::new()),
+        // A PS2 disc has no system art: its title screen, composed.
+        ("pulse-ps2-eu.chd", vec![("title", 480, 272, None)]),
     ];
     for (name, wanted) in expected {
         let Some(path) = oag_testdata::exact(name) else {
@@ -95,18 +95,18 @@ fn a_vpk_offers_its_pic0() {
 
 #[test]
 #[ignore = "needs the Omega packages under data/images/"]
-fn the_omega_package_and_its_unpacked_folder_offer_both_pictures() {
-    let both: Found = vec![("pic0", 1920, 1080, None), ("pic1", 1920, 1080, None)];
+fn the_omega_package_and_its_unpacked_folder_offer_its_pic0() {
+    let pic0: Found = vec![("pic0", 1920, 1080, None)];
     let Some(package) = oag_testdata::exact("omega-ps4-eu.pkg") else {
         return;
     };
-    assert_eq!(offered(&package, Vec::new()), both, "the package");
+    assert_eq!(offered(&package, Vec::new()), pic0, "the package");
     let Some(folder) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
     assert_eq!(
         offered(&folder, vec![package]),
-        both,
+        pic0,
         "the folder, art out of the package"
     );
     // With no package left, the folder has no art and the card shows the name.

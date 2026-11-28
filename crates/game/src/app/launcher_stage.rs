@@ -74,8 +74,8 @@ impl LauncherStage {
         {
             match task.join() {
                 Some(Ok(loaded)) => {
-                    for (source, names) in loaded.pictures {
-                        self.launcher.set_pictures(&source, names);
+                    for (source, name) in loaded.pictures {
+                        self.launcher.set_picture(&source, &name);
                     }
                     self.sheet = loaded.sheet;
                     self.upload = true;

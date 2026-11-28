@@ -2,7 +2,7 @@
 //! (`docs/ui/launcher.md`).
 //!
 //! A card is a view over [`Launcher::rows`]: every row of a title is one of the
-//! card's *variants*, and a row with two pictures is two variants. The cursor
+//! card's *variants*, each drawn with that image's one picture. The cursor
 //! stays a row index, so what picking, the disc-key prompt and a dropped file do
 //! is the list's own code. The focused card's shown variant is what the cursor
 //! sits on.
@@ -10,7 +10,7 @@
 //! # The art
 //!
 //! Pixels live in the sprite sheet the stage builds ([`super::art`]), under
-//! [`picture_key`] and [`logo_key`]. This module knows only which pictures each
+//! [`picture_key`] and [`logo_key`]. This module knows only which picture each
 //! source has, and a card whose picture is not in the sheet says its name.
 
 use std::collections::BTreeMap;
@@ -92,8 +92,8 @@ impl Words {
 #[derive(Debug)]
 pub(super) struct Cards {
     pub(super) words: Words,
-    /// Source to the names of its pictures, as they were read.
-    pictures: BTreeMap<String, Vec<String>>,
+    /// Source to the name of its picture, as it was read.
+    pictures: BTreeMap<String, String>,
     /// Card key to the variant it shows, remembered and chosen alike.
     shown: BTreeMap<String, String>,
     /// The focused card's index.
@@ -158,10 +158,10 @@ impl Launcher {
             .map(|row| row.source.as_str())
     }
 
-    /// Records the pictures `source` has, once they have been read.
-    pub fn set_pictures(&mut self, source: &str, names: Vec<String>) {
+    /// Records the picture `source` has, once it has been read.
+    pub fn set_picture(&mut self, source: &str, name: &str) {
         if let Some(cards) = &mut self.cards {
-            cards.pictures.insert(source.to_string(), names);
+            cards.pictures.insert(source.to_string(), name.to_string());
         }
         self.sync();
     }
@@ -523,19 +523,19 @@ impl Launcher {
             .then(|| format!("{}/{}", self.shown_variant(card) + 1, card.variants.len()));
         let room = w - counter
             .as_ref()
-            .map_or(0.0, |c| (c.len() + 1) as f32 * BADGE_CHAR);
+            .map_or(0.0, |c| (c.len() + 1) as f32 * CAPTION_CHAR);
         out.push(super::text(
             x,
             y + h + 3.0,
-            1.0,
+            CAPTION_SCALE,
             colour,
-            &fit(&caption(row), room),
+            &caption(row, room),
         ));
         if let Some(counter) = counter {
             out.push(Draw::Text {
                 x: x + w,
                 y: y + h + 3.0,
-                scale: 1.0,
+                scale: CAPTION_SCALE,
                 color: colour,
                 border: None,
                 align: Align::Right,
@@ -591,18 +591,22 @@ impl Launcher {
     }
 }
 
-/// What a card is called under its picture: the title, or the file name for a
-/// row that does not open as a title.
-fn caption(row: &Candidate) -> String {
-    match row.playable() {
-        Some(title) => title.name.to_string(),
-        None => row.name.clone(),
-    }
+/// What a card says under its picture, in `width`: the title and the image
+/// shown (its serial, or the file's name without one), or the file name alone
+/// for a row that does not open as a title. A title too long to fit is cut, so
+/// the image stays readable.
+fn caption(row: &Candidate, width: f32) -> String {
+    let Some(title) = row.playable() else {
+        return fit(&row.name, width);
+    };
+    let image = row.serial.as_deref().unwrap_or(&row.name);
+    let left = width - (image.chars().count() + 2) as f32 * CAPTION_CHAR;
+    fit(&format!("{}  {image}", fit(title.name, left)), width)
 }
 
 /// `text` cut to `width` with a trailing "..." when it would run past it.
 fn fit(text: &str, width: f32) -> String {
-    let most = (width / BADGE_CHAR).max(0.0) as usize;
+    let most = (width / CAPTION_CHAR).max(0.0) as usize;
     if text.chars().count() <= most {
         return text.to_string();
     }
@@ -666,8 +670,8 @@ fn has_playable_copy(rows: &[Candidate], locked: &Candidate) -> bool {
 /// are two cards), oldest release first, then one for each row that does not
 /// open as a title.
 #[must_use]
-pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Vec<Card> {
-    let count = |row: usize| pictures.get(&rows[row].source).map_or(0, Vec::len);
+pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, String>) -> Vec<Card> {
+    let drawn = |row: usize| pictures.contains_key(&rows[row].source);
     let mut titles: Vec<(String, Vec<usize>)> = Vec::new();
     let mut closed: Vec<usize> = Vec::new();
     for (index, row) in rows.iter().enumerate() {
@@ -684,7 +688,7 @@ pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Ve
                             })
                         });
                         match twin.flatten() {
-                            Some(at) if count(members[at]) == 0 && count(index) > 0 => {
+                            Some(at) if !drawn(members[at]) && drawn(index) => {
                                 members[at] = index;
                             }
                             Some(_) => {}
@@ -698,17 +702,9 @@ pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Ve
             None => closed.push(index),
         }
     }
-    let variants_of = |row: usize| -> Vec<Variant> {
-        match pictures.get(&rows[row].source) {
-            Some(names) if !names.is_empty() => names
-                .iter()
-                .map(|name| Variant {
-                    row,
-                    picture: Some(name.clone()),
-                })
-                .collect(),
-            _ => vec![Variant { row, picture: None }],
-        }
+    let variant = |row: usize| Variant {
+        row,
+        picture: pictures.get(&rows[row].source).cloned(),
     };
     // A copy whose platform is not known (an extracted install) joins the
     // title's card on a known platform when there is one.
@@ -738,7 +734,7 @@ pub fn build(rows: &[Candidate], pictures: &BTreeMap<String, Vec<String>>) -> Ve
         .into_iter()
         .map(|(key, members)| Card {
             key,
-            variants: members.into_iter().flat_map(variants_of).collect(),
+            variants: members.into_iter().map(variant).collect(),
         })
         .chain(closed.into_iter().map(|row| Card {
             key: format!("row:{}", rows[row].name),
@@ -861,6 +857,9 @@ const DISC_HIT: f32 = 24.0;
 /// font takes (badge and captions).
 const BADGE: f32 = 11.0;
 const BADGE_CHAR: f32 = 6.0;
+/// The caption's text scale, and the width a character takes at it.
+const CAPTION_SCALE: f32 = 0.75;
+const CAPTION_CHAR: f32 = BADGE_CHAR * CAPTION_SCALE;
 /// The logo's left edge and width as fractions of the card: over the side of
 /// HD's picture the swirl leaves clear.
 const LOGO_LEFT: f32 = 0.05;

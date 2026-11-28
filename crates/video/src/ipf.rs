@@ -175,6 +175,33 @@ impl Ipf<'_> {
     }
 }
 
+/// Wraps a bare IPU bitstream in the 16-byte `ipum` header `ffmpeg`'s demuxer
+/// reads.
+///
+/// ```text
+/// +0x00  u8[4]   "ipum"
+/// +0x04  u32le   payload length
+/// +0x08  u16le   width
+/// +0x0a  u16le   height
+/// +0x0c  u32le   frame count
+/// +0x10          the bitstream
+/// ```
+///
+/// This is `ffmpeg`'s container, not Wipeout's: it exists only to hand the
+/// decoder the dimensions, which the IPU bitstream does not carry. Everything
+/// after the header is the `.IPF`'s own bytes, unaltered.
+#[must_use]
+pub fn ipum(bitstream: &[u8], width: u32, height: u32, frames: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(16 + bitstream.len());
+    out.extend_from_slice(b"ipum");
+    out.extend_from_slice(&(bitstream.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(width as u16).to_le_bytes());
+    out.extend_from_slice(&(height as u16).to_le_bytes());
+    out.extend_from_slice(&(frames as u32).to_le_bytes());
+    out.extend_from_slice(bitstream);
+    out
+}
+
 /// Reads an IPF's header and cuts out every frame's payload.
 ///
 /// # Errors

@@ -142,7 +142,7 @@ pub(super) fn transcode_ipu(
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
     let source = cache_dir.join(format!("{key}.ipu"));
-    let wrapped = ipum(&parsed.bitstream(), width, height, parsed.len());
+    let wrapped = ipf::ipum(&parsed.bitstream(), width, height, parsed.len());
     std::fs::write(&source, &wrapped).with_context(|| format!("writing {}", source.display()))?;
 
     run_ffmpeg(&source, &out, Some("ipu"), Frames::capped(frames), watch)?;

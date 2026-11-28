@@ -111,6 +111,7 @@ pub const TITLE: &Title = &Title {
     // cleared frame. See `oag_title::Loading`.
     loading: None,
     music: Some(MUSIC),
+    launcher_card: None,
     cursor: include_str!("../../../assets/cursors/pure.svg"),
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,

@@ -16,12 +16,14 @@ Nothing is copied out of an image, cached to disk or shipped.
   on PSP and on PS2 are two cards, and a copy whose platform is unknown (an
   extracted install) joins its title's card. Cards run oldest release first, by
   each title's `released` dates in `oag_title::Title` (European release): Pure,
-  Pulse PSP, HD, Pulse PS2, 2048, Omega. Every image of the title, and every picture
-  an image carries, is one of the card's *variants*.
+  Pulse PSP, HD, Pulse PS2, 2048, Omega. Every image of the title is one of the
+  card's *variants*, drawn with that image's own picture: one picture per image.
 - **The disc** (a plain CD shape) at a card's top right, shown only when there is
   more than one variant, steps through them. The caption under the card is the
-  title's name, with the variant's place (`2/3`) at its right; a name too long to
-  fit beside it is cut with `...`. When a title has cards on two platforms, each
+  title's name and the shown image's serial (the file's name where it has none),
+  with the variant's place (`2/3`) at its right, at three quarters of the
+  screen's text size. A title too long to fit beside them is cut with `...`, so
+  the image stays readable. When a title has cards on two platforms, each
   carries its platform (`PSP`, `PS2`) in a badge at its bottom right.
 - **The choice is remembered** in `settings.toml`, `[launcher.pictures]`, keyed
   by title. Before the pictures are read, confirming still boots the remembered
@@ -72,9 +74,18 @@ it turns out to be:
 | PS3 disc (HD/Fury) | `PS3_GAME/PIC1.PNG`, no wordmark | `PS3_GAME/ICON0.PNG`, the logo | 1920x1080, 320x176 | [PS3 disc](../formats/ps3-disc.md#system-art) |
 | installed PSN folder (HD) | `PIC1.PNG` | `ICON0.PNG` | 1920x1080, 320x176 | [HD PSN](../formats/hd-psn.md#system-art) |
 | Vita folder or `.vpk` (2048) | `sce_sys/pic0.png`, wordmark included | | 960x544 | [Vita packages](../formats/vita-package.md#system-art) |
-| PS4 `.pkg` (Omega) | header entries `pic0.png` and `pic1.png`, two variants | | 1920x1080 | [PS4 packages](../formats/ps4-package.md#system-art) |
+| PS4 `.pkg` (Omega) | header entry `pic0.png`, else `pic1.png` | | 1920x1080 | [PS4 packages](../formats/ps4-package.md#system-art) |
 | unpacked PS4 folder | the same, read out of the title's `.pkg` if one is still on the search path | | | |
-| PS2 disc (Pulse) | none | | | |
+| PS2 disc (Pulse) | none; composed, below | | 480x272 | |
+
+### The PS2 card
+
+A PS2 disc carries no system picture, so Pulse's card is its title screen's own
+parts: `Data\FE\Images\pulse_logo.mip` centred at its texels' size on a 480x272
+frame, over frame 30 of the menu backdrop movie (`BG640.IPF`, else `BG512.IPF`;
+[IPF](../formats/ipf.md)) resampled to the same size. The frame, one with the
+backdrop's rays in view, and the centring are this screen's own choice. The frame
+is decoded by `ffmpeg`; without one the logo sits on black.
 
 - The HD logo is drawn as the opaque rectangle it is (`ICON0.PNG` is RGB with no
   alpha): no colour is keyed out. It sits over the left of the picture, at half
@@ -82,6 +93,8 @@ it turns out to be:
 - The `.vpk` read is checked on the stand-in packages
   `scripts/make-test-vpk.sh` zips from the extracted folders, not on a NoNpDrm
   dump.
+- The 2048 demo's extract folder has a picture only when `sce_sys/pic0.png` is
+  linked beside its archive ([installing](../overview/installing.md)).
 - An unpacked Omega folder keeps no system art (the extraction is the package's
   file system, and the pictures are header entries outside it). With the `.pkg`
   deleted the card shows the name.
@@ -102,7 +115,7 @@ while the art is being read.
 
 | claim | test |
 | --- | --- |
-| each source shape offers its pictures, at these sizes | `crates/source/tests/system_art_ground_truth.rs` |
+| each source shape offers its picture, at this size | `crates/source/tests/system_art_ground_truth.rs` |
 | the art reaches the screen, a switched picture survives a restart, the flag and the setting bring back the list | `crates/game/tests/launcher_cards_ground_truth.rs` |
 | grouping, input, the name fallback, layout | `crates/game/src/launcher/cards/tests.rs` |
 

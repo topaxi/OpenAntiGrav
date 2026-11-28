@@ -215,6 +215,7 @@ pub const TITLE: &Title = &Title {
     // is worth a second look: its `data/FE/Images/cursor.gxt` turned out to
     // be a 32x16 mark, the same shape as HD's strip underline `cursor.gtf`,
     // not a pointer, and whether PS TV mode draws one at all is unread.
+    launcher_card: None,
     cursor: include_str!("../../../assets/cursors/2048.svg"),
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,

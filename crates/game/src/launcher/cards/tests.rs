@@ -63,7 +63,7 @@ fn chooser(rows: Vec<Candidate>, remembered: &[(&str, &str)]) -> Launcher {
 
 fn read_art(launcher: &mut Launcher) {
     for source in ["eu.chd", "usa.chd", "pure.chd"] {
-        launcher.set_pictures(&format!("data/images/{source}"), vec!["pic1".to_string()]);
+        launcher.set_picture(&format!("data/images/{source}"), "pic1");
     }
 }
 
@@ -247,24 +247,6 @@ fn the_disc_steps_through_a_titles_images_and_reports_the_choice() {
 }
 
 #[test]
-fn a_card_with_two_pictures_of_one_image_switches_between_them() {
-    let mut launcher = chooser(vec![row("omega", oag_omega::TITLE, None)], &[]);
-    launcher.set_pictures(
-        "data/images/omega",
-        vec!["pic0".to_string(), "pic1".to_string()],
-    );
-    let card = launcher.card_list()[0].clone();
-    assert_eq!(card.variants.len(), 2);
-    assert_eq!(launcher.shown_variant(&card), 0);
-    press(&mut launcher, Button::Square);
-    assert_eq!(launcher.shown_variant(&card), 1);
-    assert_eq!(
-        launcher.take_choice().map(|(_, v)| v).as_deref(),
-        Some("omega:pic1")
-    );
-}
-
-#[test]
 fn a_remembered_image_is_shown_again_even_before_its_art_is_read() {
     let key = chooser(library(), &[]).card_list()[1].key.clone();
     let mut launcher = chooser(library(), &[(&key, "UCUS-98712:pic1")]);
@@ -366,8 +348,7 @@ fn a_card_whose_art_will_not_read_says_its_name() {
     assert!(drawn.contains(&"Wipeout Pulse".to_string()), "{drawn:?}");
     assert!(drawn.contains(&"Wipeout Pure".to_string()), "{drawn:?}");
 
-    launcher.set_pictures("data/images/eu.chd", vec!["pic1".to_string()]);
-    launcher.set_pictures("data/images/pure.chd", Vec::new());
+    launcher.set_picture("data/images/eu.chd", "pic1");
     let mut report = Vec::new();
     let sheet = Sheet::build_with(
         &[],
@@ -392,10 +373,23 @@ fn a_card_whose_art_will_not_read_says_its_name() {
         "Pulse's picture and no stand-in for Pure"
     );
     let drawn = texts(&draws);
-    // Each name is the caption once; Pure's is also drawn in its empty card.
+    // Each card's caption names its title and image; Pure's name is also drawn
+    // in its empty card.
     let count = |name: &str| drawn.iter().filter(|t| *t == name).count();
-    assert_eq!(count("Wipeout Pulse"), 1, "{drawn:?}");
-    assert_eq!(count("Wipeout Pure"), 2, "{drawn:?}");
+    assert_eq!(count("Wipeout Pulse  UCES-00465"), 1, "{drawn:?}");
+    assert_eq!(count("Wipeout Pure  UCES-00001"), 1, "{drawn:?}");
+    assert_eq!(count("Wipeout Pure"), 1, "{drawn:?}");
+}
+
+#[test]
+fn a_caption_cuts_the_title_and_keeps_the_image() {
+    let long = row("ps4", oag_omega::TITLE, None);
+    let chars = |count: f32| count * CAPTION_CHAR;
+    assert_eq!(
+        caption(&long, chars(40.0)),
+        "Wipeout: Omega Collection  ps4"
+    );
+    assert_eq!(caption(&long, chars(20.0)), "Wipeout: Ome...  ps4");
 }
 
 #[test]

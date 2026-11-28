@@ -14,13 +14,16 @@
 //! | PS4 `.pkg` | header entries `pic0.png`, `pic1.png` | none |
 //! | unpacked PS4 folder | the same, from the title's `.pkg` if one is still there | none |
 //!
-//! A PS2 disc has none of these, and a file that will not decode counts as
+//! A PS2 disc has none of these, so its picture is put together from its title
+//! screen's own parts ([`title_screen`]). A file that will not decode counts as
 //! absent.
 
 use std::path::{Path, PathBuf};
 
 use oag_disc::DiscImage;
 use oag_disc::ps4_pkg::{self, header};
+
+mod title_screen;
 
 /// A decoded picture: RGBA8888, row-major from the top left.
 #[derive(Clone)]
@@ -39,10 +42,11 @@ impl std::fmt::Debug for Picture {
     }
 }
 
-/// One picture a source offers for its title.
+/// The picture a source offers for its title.
 #[derive(Debug, Clone)]
 pub struct Art {
-    /// `pic0` or `pic1`, the file's own name: what a remembered choice is keyed by.
+    /// `pic0` or `pic1`, the file's own name, or `title` for a composed one:
+    /// what a remembered choice is keyed by.
     pub name: &'static str,
     /// The picture.
     pub picture: Picture,
@@ -51,19 +55,18 @@ pub struct Art {
     pub logo: Option<Picture>,
 }
 
-/// Every picture `source` carries, the preferred one first. Empty when it
-/// carries none.
+/// The picture `source` carries, `None` when it carries none.
 ///
 /// Reads files, and so belongs on a worker thread.
 #[must_use]
-pub fn read(source: &str) -> Vec<Art> {
+pub fn read(source: &str) -> Option<Art> {
     read_with(source, crate::source::ps4_base_packages)
 }
 
 /// [`read`], with where an unpacked PS4 folder's package is looked for handed
 /// in: the search path is relative to the run's directory.
 #[must_use]
-pub fn read_with(source: &str, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Vec<Art> {
+pub fn read_with(source: &str, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Option<Art> {
     let path = Path::new(source);
     let found = if path.is_dir() {
         directory(path, ps4_packages)
@@ -72,7 +75,10 @@ pub fn read_with(source: &str, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> V
     } else {
         disc(path)
     };
-    log::debug!("{source}: {} system picture(s)", found.len());
+    log::debug!(
+        "{source}: system picture {}",
+        found.as_ref().map_or("none", |art| art.name)
+    );
     found
 }
 
@@ -83,7 +89,7 @@ fn is_ps4_package(path: &Path) -> bool {
 }
 
 /// An unpacked folder, told apart by the same files `crate::source` lists it by.
-fn directory(root: &Path, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Vec<Art> {
+fn directory(root: &Path, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Option<Art> {
     if root.join("base/sce_sys").is_dir() {
         let pic0 = file(&root.join("base/sce_sys/pic0.png"));
         return one("pic0", pic0, None);
@@ -97,36 +103,30 @@ fn directory(root: &Path, ps4_packages: impl FnOnce() -> Vec<PathBuf>) -> Vec<Ar
         return ps4_packages()
             .iter()
             .filter(|pkg| ps4_pkg::header::content_id(pkg).is_some_and(|id| id.contains(mark)))
-            .map(|pkg| ps4_package(pkg))
-            .find(|found| !found.is_empty())
-            .unwrap_or_default();
+            .find_map(|pkg| ps4_package(pkg));
     }
-    Vec::new()
+    None
 }
 
-/// A PS4 package's two pictures, from whichever package of the title keeps them
-/// (a patch keeps neither).
-fn ps4_package(path: &Path) -> Vec<Art> {
+/// A PS4 package's picture, `pic0` before `pic1`, from whichever package of
+/// the title keeps it (a patch keeps neither).
+fn ps4_package(path: &Path) -> Option<Art> {
     let packages: Vec<PathBuf> = ps4_pkg::set::siblings(path);
-    let mut found = Vec::new();
-    for (name, id) in [("pic0", header::PIC0_PNG), ("pic1", header::PIC1_PNG)] {
-        let picture = packages
-            .iter()
-            .find_map(|package| header::header_entry(package, id))
-            .and_then(|bytes| decode(&bytes, &format!("{} {name}", path.display())));
-        found.extend(one(name, picture, None));
-    }
-    found
+    [("pic0", header::PIC0_PNG), ("pic1", header::PIC1_PNG)]
+        .into_iter()
+        .find_map(|(name, id)| {
+            let picture = packages
+                .iter()
+                .find_map(|package| header::header_entry(package, id))
+                .and_then(|bytes| decode(&bytes, &format!("{} {name}", path.display())));
+            one(name, picture, None)
+        })
 }
 
 /// A disc image or a `.vpk`, told apart by which of the three art files it holds.
-fn disc(path: &Path) -> Vec<Art> {
-    let Ok(mut image) = DiscImage::open(path) else {
-        return Vec::new();
-    };
-    let Ok(entries) = image.entries().map(<[_]>::to_vec) else {
-        return Vec::new();
-    };
+fn disc(path: &Path) -> Option<Art> {
+    let mut image = DiscImage::open(path).ok()?;
+    let entries = image.entries().map(<[_]>::to_vec).ok()?;
     let mut read = |wanted: &str| {
         // A package prefixes each file with its archive's name, so the match is
         // on the tail.
@@ -148,18 +148,18 @@ fn disc(path: &Path) -> Vec<Art> {
         let logo = read("PS3_GAME/ICON0.PNG");
         return one("pic1", Some(pic1), logo);
     }
-    one("pic0", read("sce_sys/pic0.png"), None)
+    if let Some(pic0) = read("sce_sys/pic0.png") {
+        return one("pic0", Some(pic0), None);
+    }
+    one("title", title_screen::compose(path), None)
 }
 
-fn one(name: &'static str, picture: Option<Picture>, logo: Option<Picture>) -> Vec<Art> {
-    picture
-        .map(|picture| Art {
-            name,
-            picture,
-            logo,
-        })
-        .into_iter()
-        .collect()
+fn one(name: &'static str, picture: Option<Picture>, logo: Option<Picture>) -> Option<Art> {
+    picture.map(|picture| Art {
+        name,
+        picture,
+        logo,
+    })
 }
 
 /// A loose file, absent without complaint when it is not there.

@@ -66,8 +66,9 @@ starts, wordmark included, on 2048 a palette PNG; `sce_sys/icon0.png` is the
 extracted folder's `base/sce_sys/` or from a `.vpk`'s own `sce_sys/`.
 Confidence 95 for the folders (`PCSF00007` and `PCSA00015` decoded and looked
 at, 2026-11-27); the `.vpk` read is checked on the stand-in package above, not on
-a NoNpDrm dump. The `PCSF00110` extract here
-has no `sce_sys`, so it has no picture.
+a NoNpDrm dump. The `PCSF00110` demo's package ships `sce_sys/pic0.png` too; its
+extract folder has it only when it is linked beside the archive
+([installing](../overview/installing.md)).
 
 Omega: *checked, differs*: its pictures are entries of the PS4 package's header,
 outside the file tree ([PS4 packages](ps4-package.md#system-art)).

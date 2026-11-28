@@ -49,6 +49,7 @@ pub mod hull_shake;
 pub mod language;
 pub mod lap_hud;
 pub mod launch_hover;
+pub mod launcher_card;
 pub mod legend;
 pub mod loading;
 pub mod loyalty;
@@ -316,6 +317,9 @@ pub struct Title {
     /// than [`MenuSkin`] because a title with no menu skin (front end unread) still
     /// answers a pointer. Rasterised and drawn by `oag_game::cursor`.
     pub cursor: &'static str,
+    /// The parts a launcher card is composed from on a disc of this title that
+    /// carries no system picture, or `None`. See [`launcher_card::LauncherCard`].
+    pub launcher_card: Option<launcher_card::LauncherCard>,
     /// Whether this title's own `original` shadow tier is built, and so whether
     /// the shadow setting defaults to it. See [`shadow::OriginalShadows`].
     pub original_shadows: shadow::OriginalShadows,

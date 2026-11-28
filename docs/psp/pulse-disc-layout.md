@@ -53,7 +53,8 @@ looked at (2026-11-27).
 | Pulse EU and USA | wordmark; the two files are byte-identical |
 | Pure EU and USA | wordmark, tagline and copyright line; the two files differ |
 
-The PS2 disc of Pulse has no such picture.
+The PS2 disc of Pulse has no such picture; the chooser composes its card from the
+title screen ([launcher](../ui/launcher.md#the-ps2-card)).
 
 ## Findings
 

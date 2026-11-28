@@ -4090,6 +4090,7 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-display",
+ "oag-ffmpeg",
  "oag-formats",
  "oag-hd",
  "oag-io",
@@ -4100,6 +4101,7 @@ dependencies = [
  "oag-testdata",
  "oag-texture",
  "oag-title",
+ "oag-video",
  "oag-weapons",
  "zip",
 ]

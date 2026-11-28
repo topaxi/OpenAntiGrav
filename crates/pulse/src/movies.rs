@@ -11,6 +11,9 @@
 //!
 //! See `docs/ps2/pulse-disc-layout.md` and `docs/formats/ipf.md`.
 
+/// The PS2 menu backdrop's two cuts.
+pub const BACKDROP_CUTS: [&str; 2] = ["DATA/MOVIES/BG640.IPF", "DATA/MOVIES/BG512.IPF"];
+
 /// Names that are answered by a loose file, and the two cuts that answer them.
 ///
 /// **640 is listed first on each row, so a PS2 source plays the 60 Hz cut.**
@@ -37,12 +40,6 @@ pub const LOOSE_MOVIES: [(&str, [&str; 2]); 4] = [
         r"Data\Movies\Intro.pss",
         ["DATA/MOVIES/INTRO640.PSS", "DATA/MOVIES/INTRO512.PSS"],
     ),
-    (
-        r"Data\Movies\Backdrop.ipf",
-        ["DATA/MOVIES/BG640.IPF", "DATA/MOVIES/BG512.IPF"],
-    ),
-    (
-        crate::names::BACKDROP_MOVIE,
-        ["DATA/MOVIES/BG640.IPF", "DATA/MOVIES/BG512.IPF"],
-    ),
+    (r"Data\Movies\Backdrop.ipf", BACKDROP_CUTS),
+    (crate::names::BACKDROP_MOVIE, BACKDROP_CUTS),
 ];

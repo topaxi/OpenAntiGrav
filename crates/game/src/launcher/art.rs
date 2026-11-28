@@ -19,8 +19,8 @@ const DISC_SVG: &[u8] = include_bytes!("../../../../assets/ui/launcher-disc.svg"
 /// What came back from [`load`].
 #[derive(Debug)]
 pub struct Loaded {
-    /// Source to the names of the pictures it carries.
-    pub pictures: Vec<(String, Vec<String>)>,
+    /// Each source that carries a picture, and the picture's name.
+    pub pictures: Vec<(String, String)>,
     /// Every picture and logo, with the disc.
     pub sheet: Sheet,
 }
@@ -33,26 +33,23 @@ pub fn load(sources: &[String]) -> Loaded {
 }
 
 /// [`load`] with the reader handed in.
-pub fn load_with(sources: &[String], read: impl Fn(&str) -> Vec<Art>) -> Loaded {
+pub fn load_with(sources: &[String], read: impl Fn(&str) -> Option<Art>) -> Loaded {
     let mut pictures = Vec::new();
     let mut images = Vec::new();
     for source in sources {
-        let found = read(source);
-        pictures.push((
-            source.clone(),
-            found.iter().map(|art| art.name.to_string()).collect(),
+        let Some(art) = read(source) else {
+            continue;
+        };
+        pictures.push((source.clone(), art.name.to_string()));
+        images.push(decoded(
+            picture_key(source, art.name),
+            downscale(art.picture, ART_WIDTH),
         ));
-        for art in found {
+        if let Some(logo) = art.logo {
             images.push(decoded(
-                picture_key(source, art.name),
-                downscale(art.picture, ART_WIDTH),
+                logo_key(source, art.name),
+                downscale(logo, ART_WIDTH),
             ));
-            if let Some(logo) = art.logo {
-                images.push(decoded(
-                    logo_key(source, art.name),
-                    downscale(logo, ART_WIDTH),
-                ));
-            }
         }
     }
     images.extend(disc());

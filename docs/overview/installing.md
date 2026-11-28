@@ -294,12 +294,15 @@ Three official Wipeout demos exist as packages. Two of them race here; checked
 1. Install the package with the licence string (zRIF) that comes with the demo:
    `vita3k --pkg path/to/demo.pkg --zrif <zRIF>`. Run it on a virtual display or
    expect a window; it installs and exits.
-2. Link the decrypted archive into the folder layout 2048 is read from:
+2. Link the decrypted archive into the folder layout 2048 is read from, and the
+   picture the launcher draws on its card:
 
    ```sh
-   mkdir -p data/extracted/vita/PCSF00110/base/PSP2
+   mkdir -p data/extracted/vita/PCSF00110/base/PSP2 data/extracted/vita/PCSF00110/base/sce_sys
    ln -s ~/.local/share/Vita3K/Vita3K/ux0/app/PCSF00110/PSP2/data.psarc \
      data/extracted/vita/PCSF00110/base/PSP2/data.psarc
+   ln -s ~/.local/share/Vita3K/Vita3K/ux0/app/PCSF00110/sce_sys/pic0.png \
+     data/extracted/vita/PCSF00110/base/sce_sys/pic0.png
    ```
 
 3. Race its one circuit: `oag-game data/extracted/vita/PCSF00110 --race`. The
