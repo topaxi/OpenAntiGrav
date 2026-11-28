@@ -12,7 +12,7 @@ impl RaceStage {
     /// and stays silent here; its live pace caption already tells the player
     /// where they stand.
     pub(crate) fn tick_messages(&mut self) {
-        let Some(cell) = self.campaign_cell.as_ref() else {
+        let Some(cell) = self.run.campaign_cell.as_ref() else {
             return;
         };
         let detonator = cell.mode == Mode::Other(crate::campaign::DETONATOR_CELL_MODE.to_string());
@@ -20,6 +20,7 @@ impl RaceStage {
             return;
         }
         let difficulty = self
+            .run
             .campaign_difficulty
             .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
         crate::medal_watch::tick(

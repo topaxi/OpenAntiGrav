@@ -270,13 +270,9 @@ pub(crate) fn apply_two_source(
 impl Session {
     /// Launches the race `keys` name, from the settings they read.
     pub(crate) fn launch_keyed(&mut self, keys: &menu::LaunchInputs) {
-        // Defensive, the same reason `Session::launch_from_settings` clears all of these:
-        // a cell abandoned mid-`Team Selection` must never leak its own eliminator target
-        // or lap override into an unrelated launch.
-        self.campaign_cell = None;
-        self.campaign_custom = None;
-        self.campaign_difficulty = None;
-        self.campaign_ai_skill_scale = None;
+        // A new run, the same reason `Session::launch_from_settings` ends the old one: a cell
+        // abandoned mid-`Team Selection` must never leak into an unrelated launch.
+        self.end_run();
         let inputs = match read_inputs(&self.settings, keys) {
             Ok(inputs) => inputs,
             Err(why) => {

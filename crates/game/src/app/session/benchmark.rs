@@ -18,6 +18,7 @@ use crate::benchmark::{self, Done, Live, ModLoaded, Origin, Recorder, Report, Re
 use oag_gameplay::input::Button;
 use oag_ui::pointer::Pointer;
 
+use crate::app::run_context::RunContext;
 use crate::app::stage::Stage;
 
 use super::Session;
@@ -47,18 +48,15 @@ struct Launch {
     tick_cap: u32,
 }
 
-/// The launch fields a benchmark clears, as the player (or a dev flag) had them.
+/// The autopilot fields a benchmark clears, as the player (or a dev flag) had them.
 struct Pinned {
     autopilot_pilot: Option<oag_ai::Pilot>,
     autopilot_skill: Option<oag_ai::Difficulty>,
-    campaign_cell: Option<oag_tables::race_campaign::Cell>,
-    campaign_custom: Option<crate::campaign::custom::Launch>,
-    campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
-    campaign_ai_skill_scale: Option<f32>,
 }
 
 struct Saved {
-    race_options: Option<oag_raceplay::Options>,
+    /// The run the player was launching, moved aside: the benchmark races a run of its own.
+    run: Option<RunContext>,
     autopilot: bool,
     pinned: Pinned,
     /// The settings as the player has them, put back when the run ends: a run's preset, vsync and
@@ -275,19 +273,14 @@ impl Session {
                 .collect(),
             _ => Vec::new(),
         };
-        let player = self.race_options.replace(options);
         // The first launch of a run keeps the player's own; a re-run replaces a benchmark's.
         if self.benchmark.saved.is_none() {
             self.benchmark.saved = Some(Saved {
-                race_options: player,
+                run: self.run.take(),
                 autopilot: self.autopilot,
                 pinned: Pinned {
                     autopilot_pilot: self.autopilot_pilot.take(),
                     autopilot_skill: self.autopilot_skill.take(),
-                    campaign_cell: self.campaign_cell.take(),
-                    campaign_custom: self.campaign_custom.take(),
-                    campaign_difficulty: self.campaign_difficulty.take(),
-                    campaign_ai_skill_scale: self.campaign_ai_skill_scale.take(),
                 },
                 settings: self.settings.clone(),
                 trail,
@@ -317,10 +310,10 @@ impl Session {
         self.autopilot = true;
         self.autopilot_pilot = None;
         self.autopilot_skill = None;
-        self.campaign_cell = None;
-        self.campaign_custom = None;
-        self.campaign_difficulty = None;
-        self.campaign_ai_skill_scale = None;
+        self.run = Some(RunContext {
+            options: Some(options),
+            ..RunContext::default()
+        });
         self.benchmark.launching = Some(Launch {
             origin,
             request,
@@ -374,15 +367,11 @@ impl Session {
     /// Puts the player's own options, autopilot flag and (after a preset) settings back.
     fn restore_benchmark_player(&mut self) {
         if let Some(saved) = self.benchmark.saved.take() {
-            self.race_options = saved.race_options;
+            self.run = saved.run;
             self.autopilot = saved.autopilot;
             let pinned = saved.pinned;
             self.autopilot_pilot = pinned.autopilot_pilot;
             self.autopilot_skill = pinned.autopilot_skill;
-            self.campaign_cell = pinned.campaign_cell;
-            self.campaign_custom = pinned.campaign_custom;
-            self.campaign_difficulty = pinned.campaign_difficulty;
-            self.campaign_ai_skill_scale = pinned.campaign_ai_skill_scale;
             self.settings = saved.settings;
             // The one preset key with a runtime field of its own beside the setting.
             self.anisotropy = self.settings.graphics.anisotropy;

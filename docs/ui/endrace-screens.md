@@ -468,7 +468,7 @@ them from the first frame.
   Results` -> `EndRace Rewards` ("bronze medal received") -> Enter ->
   `EndRace Menu` with `RETURN TO GRID` as the default row -> Enter ->
   `Cell Selection` back on `grid0_3_1`, its `Best` now `Bronze`. So
-  `RaceStage::campaign_cell` does survive the drain in
+  the race stage's campaign cell does survive the drain in
   `Session::advance_race_build`. **Seen on the same walk, fixed
   2026-09-28**: `EndRace Rewards` drew no loyalty row. Cause, confirmed by
   reading the code: `Session::launch_campaign_cell` built `race_options`

@@ -443,8 +443,10 @@ impl Session {
         if let Some(parked) = self.suspended_race.take() {
             crate::app::race_build::drop_off_thread(parked);
         }
-        self.pending_event = None;
-        self.pending_card = None;
+        if let Some(run) = self.run.as_mut() {
+            run.pending_event = None;
+            run.pending_card = None;
+        }
         let mode = options.mode;
         self.watching = Some(Box::new(watching));
         self.start_race_loading(options, mode, None, false)

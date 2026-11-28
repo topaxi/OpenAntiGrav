@@ -48,7 +48,7 @@ impl RaceStage {
             .options
             .extend(oag_raceplay::Launch::ai_table(
                 original,
-                self.campaign_ai_skill_scale,
+                self.run.campaign_ai_skill_scale,
                 skill_level,
             ));
     }

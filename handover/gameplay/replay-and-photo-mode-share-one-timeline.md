@@ -2,7 +2,7 @@
 status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-27
+updated: 2026-11-28
 summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways and share their keys (ADR-0088); stage 7 take-over is next"
 size: XL
 difficulty: hard
@@ -104,8 +104,9 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
     **Mapped (`nav-stack-map`):** [navigation map](../../docs/architecture/navigation-map.md), "The failing case",
     traces where the leg context is lost (`start_race_loading` drops the finished leg's `RaceStage`); the
     structure that fixes it is [ADR-0099](../../docs/architecture/adr/0099-a-run-context-and-an-activity-stack-own-navigation.md)
-    (Proposed), whose migration steps 1 to 4 end in this acceptance as a test. Also found by reading: a
-    Tournament leg whose load fails leaves `Session::tournament` set (ADR-0099 migration step 2).
+    (Accepted 2026-11-28), whose migration steps 1 to 4 end in this acceptance as a test. **Step 1 landed**: the
+    launch slots live in one `RunContext` (`crates/game/src/app/run_context.rs`), moved into the `RaceStage` at
+    build; RACE AGAIN, NEXT RACE and RESTART relaunch from the race's copy. Steps 2 to 5 are open.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
   craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second at Venom on all
   five titles (Phantom, first 6,000 ticks: 197 to 263; 4.5 percent over the ADR's Venom row: the sweep stored no key index), a respawn bounded to the same error on all five,

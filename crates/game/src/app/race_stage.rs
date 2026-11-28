@@ -102,32 +102,15 @@ pub(crate) struct RaceStage {
     /// on the way into the park; clearing the flag on the way back out does
     /// not lose that write; it only stops it from blocking the next one.
     pub(crate) result_saved: bool,
-    /// The campaign cell this race was launched against, or `None` for an
-    /// ordinary RACE-page/two-title race page/`--race` launch. Drained from
-    /// `Session::campaign_cell` into here the moment this stage is built
-    /// (`crate::app::session::load::finish_loading`) - the mirror of
-    /// `DAT_08b30ffc`, per
-    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
-    /// campaign event launches". Read by [`RaceStage::observation`] alone.
-    pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The run this race belongs to (ADR-0099), moved in from `Session::run` the moment this
+    /// stage is built (`crate::app::session::load`'s `advance_race_build`): its campaign cell,
+    /// rung, skill scale and the options it launched with. RACE AGAIN, NEXT RACE and RESTART
+    /// relaunch from a clone of it. Default (no cell) for an ordinary RACE-page or `--race`
+    /// launch.
+    pub(crate) run: crate::app::run_context::RunContext,
     /// The title this race runs, for the law its campaign cell's medal is read with
     /// ([`oag_title::Campaign::counting_modes`]).
     pub(crate) title: &'static oag_title::Title,
-    /// A mod campaign event's extras, drained from `Session::campaign_custom`
-    /// with [`Self::campaign_cell`]: where its medal is kept, and its AI.
-    pub(crate) campaign_custom: Option<crate::campaign::custom::Launch>,
-    /// [`Self::campaign_cell`]'s own difficulty rung - `None` on every
-    /// non-campaign launch, same as that field, and also `None` on a
-    /// campaign cell with no rung to run at, per
-    /// `Session::launch_campaign_cell`'s own doc. Read by
-    /// [`RaceStage::campaign_medal`] alone.
-    pub(crate) campaign_difficulty: Option<oag_tables::race_campaign::Difficulty>,
-    /// [`Self::campaign_cell`]'s own resolved AI skill scale, drained the
-    /// same moment and applied to [`Self::race`]'s AI tuning right after -
-    /// see `Session::campaign_ai_skill_scale`'s own doc and
-    /// `crate::app::session::load::advance_race_build`, the one place this
-    /// is read.
-    pub(crate) campaign_ai_skill_scale: Option<f32>,
     /// The final standings rank this leg earns against
     /// [`Session::tournament`], or `None` on every leg but a Tournament
     /// cell's own last one - see that field's own doc.
@@ -136,7 +119,7 @@ pub(crate) struct RaceStage {
     /// `Session::tournament` at the same finish-transition
     /// (`Session::frame`'s `result_saved` guard) that
     /// `RaceStage::observation` is next built from - the mirror of
-    /// [`Self::campaign_cell`]'s own "drained once, read once" shape, except
+    /// the run's campaign cell's "moved once, read once" shape, except
     /// this is written *after* the stage already exists rather than at
     /// build time, because the rank is not known until the leg itself
     /// finishes.
@@ -153,7 +136,7 @@ pub(crate) struct RaceStage {
     /// launch on 2048 itself. Resolved by `race::load_event` onto
     /// [`race::Loaded::campaign_2048_event`] and carried straight through -
     /// see that field's own doc for why this rides on `Loaded` rather than
-    /// through `Session` the way [`Self::campaign_cell`] does.
+    /// through `Session` the way the run's campaign cell does.
     pub(crate) campaign_2048_event: Option<race::Campaign2048Progress>,
     /// What the finish banked into the profile's XP total, for the EndRace page: `None` until the
     /// finish banks, and for a race that armed no tally.
@@ -476,7 +459,10 @@ impl RaceStage {
             campaign_medal: self
                 .campaign_medal(finished, standing.best_lap_ticks)
                 .or_else(|| self.campaign_2048_medal(finished)),
-            campaign_difficulty: self.campaign_difficulty.map(Self::to_campaign_difficulty),
+            campaign_difficulty: self
+                .run
+                .campaign_difficulty
+                .map(Self::to_campaign_difficulty),
         }
     }
 
@@ -516,7 +502,7 @@ impl RaceStage {
         }
     }
 
-    /// The medal this race earns against [`Self::campaign_cell`], or `None`
+    /// The medal this race earns against the run's campaign cell, or `None`
     /// with no cell in play.
     ///
     /// **The value evaluated per mode, and why two of the five gate on
@@ -566,7 +552,7 @@ impl RaceStage {
     /// `>=` against the cell's targets (a counting mode; the title's `counting_modes`).
     ///
     /// Everything else - `Custom Grid`, `AI Race`, `NitroBattle` - is `None`:
-    /// `Self::campaign_cell` never carries one of those, since
+    /// the run's campaign cell never carries one of those, since
     /// `crate::campaign::race_mode_for_cell` refuses to map them onto a
     /// launch in the first place.
     fn campaign_medal(
@@ -582,7 +568,7 @@ impl RaceStage {
 
     /// The medal tiers this race's campaign awards: a mod campaign's own list, else the title's.
     pub(crate) fn campaign_tiers(&self) -> &oag_tables::race_campaign::MedalTiers {
-        self.campaign_custom.as_ref().map_or(
+        self.run.campaign_custom.as_ref().map_or(
             oag_tables::race_campaign::MedalTiers::standard(),
             |launch| &launch.tiers,
         )
@@ -597,7 +583,7 @@ impl RaceStage {
         Some(self.campaign_tiers().get(tier)?.name.clone())
     }
 
-    /// The tier this race earns against [`Self::campaign_cell`]: [`Self::campaign_medal`]'s law,
+    /// The tier this race earns against the run's campaign cell: [`Self::campaign_medal`]'s law,
     /// as a position in [`Self::campaign_tiers`].
     fn campaign_tier(
         &self,
@@ -605,7 +591,7 @@ impl RaceStage {
         best_lap_ticks: Option<u32>,
     ) -> Option<oag_tables::race_campaign::Medal> {
         use oag_tables::race_campaign::Mode as CampaignMode;
-        let cell = self.campaign_cell.as_ref()?;
+        let cell = self.run.campaign_cell.as_ref()?;
         let value = match cell.mode {
             CampaignMode::Race | CampaignMode::Head2Head if finished => {
                 Some(i64::from(self.race.core.player_place()))
@@ -628,7 +614,7 @@ impl RaceStage {
             // elsewhere (HD, Omega): `crate::medal_watch::elimination_value`.
             CampaignMode::Elimination => crate::medal_watch::elimination_value(
                 self.title.campaign.counting_modes,
-                self.campaign_custom.is_some(),
+                self.run.campaign_custom.is_some(),
                 finished,
                 self.race.core.player_standing().kills,
                 self.race.core.eliminator_place(),
@@ -644,14 +630,15 @@ impl RaceStage {
         // Evaluated against whichever rung the cell was actually launched
         // at (`Session::launch_campaign_cell`'s own doc), falling back to
         // `Medium` - the same rung `Cell::evaluate_medal` itself always
-        // used - for the cells `Self::campaign_difficulty` is `None` on:
+        // used - for the cells the run's rung is `None` on:
         // Pulse, and any flat-schema HD cell, both of which
         // `Cell::targets_for_difficulty` already answers identically for
         // every rung.
         let difficulty = self
+            .run
             .campaign_difficulty
             .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
-        match &self.campaign_custom {
+        match &self.run.campaign_custom {
             Some(launch) => launch.tier_targets.evaluate(&cell.mode, value, difficulty),
             None => cell.evaluate_medal_for_difficulty(
                 value,
@@ -900,7 +887,7 @@ impl RaceStage {
                 &self.race,
                 &self.scene,
                 window,
-                self.campaign_cell.as_ref(),
+                self.run.campaign_cell.as_ref(),
                 self.record_target.as_ref(),
                 word.as_deref(),
                 viewport,

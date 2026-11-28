@@ -784,7 +784,7 @@ impl Session {
                 // whatever the RACE page's own settings happen to hold, so
                 // a campaign launch takes its own tail instead, which copies
                 // only the team this screen just picked.
-                if self.campaign_cell.is_some() {
+                if self.launch_cell().is_some() {
                     self.launch_campaign_race();
                 } else {
                     self.launch_from_settings();
@@ -807,8 +807,8 @@ impl Session {
                 // track outright - so this reopens `Grid Selection` instead
                 // and drops the abandoned cell rather than let it leak into
                 // whatever race is launched next.
-                let difficulty = self.campaign_difficulty.take();
-                self.campaign_ai_skill_scale = None;
+                let run = self.end_run().unwrap_or_default();
+                let difficulty = run.campaign_difficulty;
                 // A Tournament cell set up its legs before this screen
                 // opened (`Session::launch_campaign_cell`); backing out
                 // abandons them, or the RACE page's next launch would run
@@ -821,10 +821,9 @@ impl Session {
                 let hd = layout_is_hd;
                 if joining {
                     // The LAN or online step is dropped by its `sync_*` once the page shows.
-                    self.campaign_cell = None;
                     return;
                 }
-                match self.campaign_cell.take() {
+                match run.campaign_cell {
                     Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty, false),
                     // Pure's chain: Back is the screen before `Team Selection`,
                     // with the cursor on the event just left.

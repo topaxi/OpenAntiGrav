@@ -213,7 +213,7 @@ impl Session {
             queue: self.gpu.queue.clone(),
             format: self.gpu.output.config.format,
             anisotropy: self.anisotropy,
-            with_trophies: stage.campaign_cell.is_some(),
+            with_trophies: stage.run.campaign_cell.is_some(),
             cancel: std::sync::Arc::clone(&stage.endrace_cancel),
         })
     }

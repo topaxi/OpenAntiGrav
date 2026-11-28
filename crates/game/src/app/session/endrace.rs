@@ -98,7 +98,7 @@ impl Session {
         } else {
             race_options.team.clone()
         };
-        let campaign = stage.campaign_cell.is_some();
+        let campaign = stage.run.campaign_cell.is_some();
         // The actual title package, not the display name above - what
         // `crate::endrace::load`'s own title dispatch needs, and what
         // this function's own dispatch (Pulse's per-lap `Results` versus
@@ -174,7 +174,7 @@ impl Session {
         });
 
         let mut strings = shell.strings.clone();
-        if let Some(launch) = stage.campaign_custom.as_ref() {
+        if let Some(launch) = stage.run.campaign_custom.as_ref() {
             crate::campaign::custom::layer_words(
                 &mut strings,
                 &launch.words,
@@ -198,7 +198,7 @@ impl Session {
                     laps: laps_flown,
                     kills: standing.kills,
                     zones: u32::from(stage.race.core.sim.world.primary_race().zone),
-                    difficulty: stage.campaign_difficulty,
+                    difficulty: stage.run.campaign_difficulty,
                 });
                 let total = self.records.record_loyalty(title_ref, &team, award);
                 crate::records::save_in_background(&self.records);
@@ -233,6 +233,7 @@ impl Session {
             Some(oag_ui_screens::endrace::Rewards {
                 medal: observation.campaign_medal.map(to_campaign_medal),
                 tier: stage
+                    .run
                     .campaign_custom
                     .as_ref()
                     .zip(stage.campaign_tier_name())
@@ -573,30 +574,10 @@ impl Session {
                     self.leave_finished_race();
                     return;
                 }
-                // The same cell has to be re-armed before `finish_launch`
-                // relaunches: `Session::launch_campaign_cell`'s own drain
-                // (`crate::app::session::load::finish_loading`) already
-                // cleared `self.campaign_cell` into the *first* `RaceStage`,
-                // so a second launch with nothing set here would lose the
-                // medal evaluation and `EndRace Rewards`' own `campaign`
-                // flag on the replay.
-                // The skill scale too: the original driver and the campaign
-                // tuning both read it, and a relaunch without it races the cell
-                // at the ambient scale instead.
-                (
-                    self.campaign_cell,
-                    self.campaign_difficulty,
-                    self.campaign_ai_skill_scale,
-                    self.campaign_custom,
-                ) = match &self.stage {
-                    Stage::Race(stage) => (
-                        stage.campaign_cell.clone(),
-                        stage.campaign_difficulty,
-                        stage.campaign_ai_skill_scale,
-                        stage.campaign_custom.clone(),
-                    ),
-                    _ => (None, None, None, None),
-                };
+                // The finished race's run again, as it launched (ADR-0099): its options, its
+                // cell, rung and skill scale, without which the relaunch would lose the medal
+                // evaluation and race the cell at the ambient scale.
+                self.rerun_race_on_screen();
                 self.finish_launch();
             }
             MenuOption::ReturnToGrid => self.return_to_campaign(),
@@ -611,7 +592,7 @@ impl Session {
     /// cell" mechanism of its own.
     fn return_to_campaign(&mut self) {
         let cell = match &self.stage {
-            Stage::Race(stage) => stage.campaign_cell.clone(),
+            Stage::Race(stage) => stage.run.campaign_cell.clone(),
             _ => None,
         };
         self.leave_finished_race();
@@ -683,7 +664,7 @@ impl Session {
         // same people seated (`Session::reenter_multiplayer`): change the track, race again.
         let multiplayer = matches!(
             &self.stage,
-            Stage::Race(stage) if stage.race.view_state().viewport_count() >= 2 && stage.campaign_cell.is_none()
+            Stage::Race(stage) if stage.race.view_state().viewport_count() >= 2 && stage.run.campaign_cell.is_none()
         );
         // Whether the tournament just finished its last leg or is being
         // abandoned early, there is nothing to carry past this point - see

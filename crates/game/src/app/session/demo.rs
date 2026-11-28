@@ -2,8 +2,8 @@
 //! (`docs/ui/attract-demo.md`).
 //!
 //! The flow itself is `crate::demo`; this is the part that needs a stage. A demo is launched
-//! through the ordinary race launch (`Session::launch_race`) on a copy of the options, so the
-//! player's settings and `race_options` are never touched, and handed over at
+//! through the ordinary race launch (`Session::launch_race`) as a run of its own (ADR-0099), so
+//! the player's settings and `race_options` are never touched, and handed over at
 //! `Session::advance_race_build` with every slot flown by the AI (`Race::fly_as_demo`). Its race
 //! stage never saves a result, a ghost or a recording, and is never parked behind the menus.
 
@@ -13,6 +13,7 @@ use crate::demo::{self, Leave, Next, Run};
 use crate::records;
 use oag_ui::pointer::Pointer;
 
+use crate::app::run_context::RunContext;
 use crate::app::stage::Stage;
 
 use super::Session;
@@ -25,8 +26,9 @@ pub(crate) struct State {
     pub(crate) cli: Option<bool>,
     /// The demo being loaded, until its race stage is live.
     pub(crate) loading: Option<Run>,
-    /// The player's `race_options`, set aside while a demo's stand in their place.
-    saved: Option<oag_raceplay::Options>,
+    /// The run the player was launching (often none), moved aside while a demo chain runs:
+    /// `Some` from the chain's first demo until the player's run is put back.
+    saved: Option<Option<RunContext>>,
     /// The last demo's pick, so the next differs.
     previous: Option<demo::Pick>,
     /// How many demos this run has started.
@@ -169,18 +171,17 @@ impl Session {
         let Some((options, title)) = self.demo_options() else {
             // Nothing to pick from, or no disc: a `--demo` run has nothing to chain.
             self.demo.cli = None;
-            self.restore_race_options();
+            self.restore_player_run();
             return false;
         };
-        let player = self.race_options.replace(options);
         // The first demo of a chain keeps the player's own; later ones replace a demo's.
+        let player = self.run.replace(RunContext {
+            options: Some(options),
+            ..RunContext::default()
+        });
         if self.demo.saved.is_none() {
-            self.demo.saved = player;
+            self.demo.saved = Some(player);
         }
-        self.campaign_cell = None;
-        self.campaign_custom = None;
-        self.campaign_difficulty = None;
-        self.campaign_ai_skill_scale = None;
         self.demo.loading = Some(Run::new(self.demo.cli == Some(true)));
         info!("{}: starting an attract demo", title.name);
         match self.launch_race() {
@@ -192,7 +193,7 @@ impl Session {
                 warn!("cannot start an attract demo: {error:#}");
                 self.demo.loading = None;
                 self.demo.cli = None;
-                self.restore_race_options();
+                self.restore_player_run();
                 false
             }
         }
@@ -288,10 +289,10 @@ impl Session {
         Some((options, title))
     }
 
-    /// Puts the player's `race_options` back where a demo's stood.
-    pub(crate) fn restore_race_options(&mut self) {
+    /// Puts the player's run back where a demo's stood.
+    pub(crate) fn restore_player_run(&mut self) {
         if let Some(saved) = self.demo.saved.take() {
-            self.race_options = Some(saved);
+            self.run = saved;
         }
     }
 
@@ -320,7 +321,7 @@ impl Session {
         }
         self.audio.pause_race_music();
         self.audio.stop_race_sfx();
-        self.restore_race_options();
+        self.restore_player_run();
         if let Err(error) = self.open_menus() {
             log::error!("cannot return to the menus: {error:#}");
             self.quit = true;

@@ -69,7 +69,7 @@ pub(super) fn input<D: Copy + PartialEq>(
 impl Session {
     /// People seated in the race box now: `1` when it is an ordinary race.
     pub(super) fn split_count(&self) -> usize {
-        if self.campaign_cell.is_some() {
+        if self.launch_cell().is_some() {
             return 1;
         }
         self.split_lobby.as_ref().map_or(1, Lobby::count).max(1)
@@ -262,8 +262,10 @@ impl Session {
             stage.partner = None;
         }
         self.split_picks.clear();
-        self.campaign_difficulty.take();
-        self.campaign_ai_skill_scale = None;
+        if let Some(run) = self.run.as_mut() {
+            run.campaign_difficulty = None;
+            run.campaign_ai_skill_scale = None;
+        }
         self.abandon_tournament();
         self.open_track_picker();
     }

@@ -614,8 +614,6 @@ impl App {
             player_asked: false,
             ffmpeg: Default::default(),
             soft_keyboard: false,
-            pending_event: None,
-            pending_card: None,
             races_launched: 0,
             menu_source: Default::default(),
             opening_reads: Default::default(),
@@ -672,10 +670,7 @@ impl App {
                 .measure_race_load
                 .and_then(crate::app::session::LoadProbe::new),
             suspended_race: None,
-            campaign_cell: None,
-            campaign_custom: None,
             custom_campaign: None,
-            campaign_home: None,
             pure_chain_class: 0,
             split_lobby: None,
             split_cut: self.split_cut,
@@ -698,10 +693,8 @@ impl App {
             mp_devices: Vec::new(),
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
-            campaign_difficulty: None,
-            campaign_ai_skill_scale: None,
-            campaign_add_on: None,
             tournament: None,
+            run: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt
             // file" case `pilots::load_from` always could hit, just reached

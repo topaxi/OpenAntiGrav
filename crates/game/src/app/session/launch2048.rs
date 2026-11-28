@@ -32,8 +32,10 @@ impl Session {
                 self.sync_race_team();
                 debug!("Launch 2048: starting campaign event {name:?}");
                 self.keep_event_cursor(&name);
-                self.pending_event = Some(name);
-                self.pending_card = card;
+                self.end_run();
+                let run = self.run_mut();
+                run.pending_event = Some(name);
+                run.pending_card = card;
                 if let Err(e) = self.launch_race() {
                     log::error!("cannot start the campaign event: {e:#}");
                 }
@@ -67,9 +69,11 @@ impl Session {
             tier.add_on.campaign
         );
         let cell = cell.clone();
-        self.campaign_add_on = Some(tier.add_on);
+        self.run_mut().campaign_add_on = Some(tier.add_on);
         self.launch_campaign_cell(cell, None);
-        self.campaign_add_on = None;
+        if let Some(run) = self.run.as_mut() {
+            run.campaign_add_on = None;
+        }
     }
 
     fn push_page(&mut self, id: &str) {

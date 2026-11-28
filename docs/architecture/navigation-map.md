@@ -101,14 +101,14 @@ directly.
 
 | Trigger | Chain | Writes first |
 | --- | --- | --- |
-| RACE page START | `start_race_box` (`menus.rs:530`) -> pickers -> `launch_from_settings` (`menus.rs:665`) -> `finish_launch` | clears `campaign_cell`; `launch_from_settings` clears the four `campaign_*` slots and rebuilds `race_options` (`menus.rs:840`) |
-| campaign cell | `handle_campaign` -> `launch_campaign_cell` (`campaign.rs:524`) -> `launch_campaign_race` -> `finish_launch` | `race_options` (`campaign.rs:689`), `campaign_cell`, `campaign_difficulty`, `campaign_ai_skill_scale`, `tournament` (`campaign.rs:711`), `campaign_home` for a mod event (`campaign.rs:623`) |
-| 2048 event | `follow_launch` (`launch2048.rs:24`) -> `launch_race` | `pending_event`, `pending_card`, `race_options`, `campaign_add_on` |
-| attract demo | `launch_demo` (`demo.rs:168`) | saves `race_options` in `demo.saved`, replaces it, clears the four `campaign_*` slots |
-| benchmark | `launch_benchmark` (`benchmark.rs:244`) | saves `race_options`, autopilot and the four `campaign_*` slots in `benchmark.saved`, then clears them |
+| RACE page START | `start_race_box` (`menus.rs:530`) -> pickers -> `launch_from_settings` (`menus.rs:665`) -> `finish_launch` | `start_race_box` and `launch_from_settings` end the pending run (`Session::end_run`); `launch_from_settings` rebuilds `race_options` |
+| campaign cell | `handle_campaign` -> `launch_campaign_cell` (`campaign.rs:524`) -> `launch_campaign_race` -> `finish_launch` | `race_options`, a fresh `run` with `campaign_cell`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_home` for a mod event; `tournament` |
+| 2048 event | `follow_launch` (`launch2048.rs:24`) -> `launch_race` | a fresh `run` with `pending_event` and `pending_card`; a tier cell sets the run's `campaign_add_on` |
+| attract demo | `launch_demo` (`demo.rs:168`) | moves the player's `run` into `demo.saved` and launches a run of its own whose `options` are the demo's; `race_options` untouched |
+| benchmark | `launch_benchmark` (`benchmark.rs:244`) | moves the player's `run` and autopilot fields into `benchmark.saved`, launches a run of its own; `race_options` untouched |
 | LAN / online | `launch_lan_race` (`lan.rs:735`), `advance_online` | `net` |
-| launch keys | `launch_keyed` | `race_options`, clears `campaign_*` |
-| WATCH, WATCH REPLAY, a shot | `watch_path` or `begin_shot` (`shot_open.rs:186`) -> `start_watching` (`replays.rs:427`) | `watching`; drops `suspended_race`, clears `pending_event` and `pending_card` |
+| launch keys | `launch_keyed` | ends the pending run, `race_options` |
+| WATCH, WATCH REPLAY, a shot | `watch_path` or `begin_shot` (`shot_open.rs:186`) -> `start_watching` (`replays.rs:427`) | `watching`; drops `suspended_race`, clears the run's `pending_event` and `pending_card` |
 
 `launch_race` and `start_watching` both **drop `suspended_race`** before they
 load (`load.rs:485`, `replays.rs:432`): a race paused behind the menus does not
@@ -117,10 +117,10 @@ survive a new launch or a replay watch.
 While the race builds, `advance_race_build` (`load.rs:781`) decides what kind of
 race it is by which `Session` slot is `Some`, in this order: `net` (a network
 race), `demo.loading` (a demo), `watching` (the viewer, `load.rs:874`), else an
-ordinary race. In the same step it **drains** the launch slots into the new
-`RaceStage`: `campaign_cell` and `campaign_custom` (`load.rs:823`),
-`campaign_difficulty` and `campaign_ai_skill_scale` (`load.rs:917`, ordinary
-races only). From here on the race, not the session, owns them.
+ordinary race. In the same step it **moves** `Session::run` into the new
+`RaceStage` (`RaceStage::run`). `launch_race` filled the run's `options` with
+`race_options` as it saw them, before its per-launch refresh. From here on the
+race, not the session, owns the run.
 
 ### In the race
 
@@ -141,8 +141,8 @@ exist only while that race is `Session::stage`. `handle_endrace_menu_option`
 
 | Option | Chain | Carried | Dropped |
 | --- | --- | --- | --- |
-| RACE AGAIN | copies `campaign_*` back from the race, `finish_launch` | the four `campaign_*` slots, `tournament` | the finished race |
-| NEXT RACE | `advance_tournament_leg` (`tournament.rs:65`): the same copy, `Progress::advance`, `race_options.track`, `finish_launch` | `campaign_*`, `tournament` with its standings | the finished leg |
+| RACE AGAIN | clones the race's run into `Session::run` (`rerun_race_on_screen`), `finish_launch` | the run (options and `campaign_*`), `tournament` | the finished race |
+| NEXT RACE | `advance_tournament_leg`: the same clone, `Progress::advance`, the run's `options.track`, `finish_launch` | the run, `tournament` with its standings | the finished leg |
 | RETURN TO GRID | `return_to_campaign` -> `leave_finished_race` -> `reopen_cell_selection` | the cell name | the race, `tournament` |
 | RETURN TO MENU | `leave_finished_race` (`endrace.rs:681`) -> `open_menus` (-> `reenter_multiplayer` for two people) | the split lobby | the race, `tournament` |
 | WATCH REPLAY | `watch_last_race` (`replays.rs:335`) -> `watch_path` -> `start_watching` -> `start_race_loading` | the recording's path | **the finished race and its end screens** (see below) |
@@ -193,21 +193,19 @@ unless the flow saved it by hand.
 | `suspended_race` | `open_menus` | dropped by `launch_race`, `start_watching`, `quit_campaign_race`: WATCH from REPLAYS over a paused race loses the race |
 | `parked_menu` | `open_hosted_map` | 2048 only; one deep |
 | `return_to_replays` | `watch_path`, `leave_viewer`, the viewer's open | a bool for one return target |
-| `race_options` | boot, `launch_from_settings`, campaign launch, 2048 launch, launch keys, demo, benchmark, `restore_campaign_home` | the RACE page's options and a campaign's share one slot; demo and benchmark save and restore it by hand |
-| `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale` | campaign launch; cleared by RACE page, demo, benchmark, launch keys | drained into the race at build; RACE AGAIN and NEXT RACE copy them back from the race; benchmark saves and restores them (`benchmark.rs:375`) |
-| `campaign_home` | a mod campaign event | `open_menus` restores `race_options`' source, craft source and difficulty from it on every return, whatever the return is for |
-| `campaign_add_on` | 2048 tier launch | set and cleared around one call |
+| `race_options` | boot, `launch_from_settings`, campaign launch, launch keys, `restore_campaign_home` | the RACE page's options and a campaign's still share one slot; a launch snapshots it into its run (`RunContext::options`), so a relaunch, a demo and a benchmark no longer write it |
+| `run` (`RunContext`: `options`, `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_add_on`, `campaign_home`, `pending_event`, `pending_card`) | campaign launch, 2048 launch, `launch_race`'s snapshot, RACE AGAIN, NEXT RACE, RESTART, demo, benchmark; ended by a RACE-page or keyed launch and a failed load | moved into the race at build (ADR-0099 migration step 1); RACE AGAIN, NEXT RACE and RESTART clone it back from the race |
+| `campaign_home` (on the run) | a mod campaign event | `open_menus` restores `race_options`' source, craft source and difficulty from the pending run's or the race on screen's, on every return, whatever the return is for |
 | `tournament` | Tournament cell launch | outlives every race by design; cleared only at the four sites above |
-| `pending_event`, `pending_card` | 2048 event launch, end-of-race restart | cleared by `start_watching` |
 | `watching`, `viewer` | replay watch | `watching` is also how `advance_race_build` knows the race is for the viewer |
-| `demo.saved`, `benchmark.saved` | demo, benchmark | hand-written save and restore of `race_options` and launch slots: a push and pop without a stack |
+| `demo.saved`, `benchmark.saved` | demo, benchmark | the player's pending run moved aside (and the benchmark's settings and autopilot): a push and pop without a stack |
 | `net`, `lan` | LAN, online | dropped by every `open_menus` |
 | `split_lobby` | multiplayer page | read back by `reenter_multiplayer` after a race |
 | `pause`, `photo` | race overlays | one each; photo mode over the viewer is a mode of `photo` |
 
 `RaceStage` also holds the launch facts a finished race needs for its end
-screens and its relaunch: `campaign_cell`, `campaign_custom`,
-`campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_2048_event`,
+screens and its relaunch: its `run` (`campaign_cell`, `campaign_custom`,
+`campaign_difficulty`, `campaign_ai_skill_scale`, the launch options), `campaign_2048_event`,
 `tournament_final_rank`, `result_key`, `endrace` and `replay_header`. They are
 dropped with the race.
 

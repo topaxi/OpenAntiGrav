@@ -363,8 +363,8 @@ mismatch to bridge there after all), maps `oag_tables::race_campaign::Mode`
 onto the five `oag_race::Mode` this engine implements
 (`oag_game::campaign::race_mode_for_cell`, `None` for `Tournament`/
 `Head2Head`/`Custom Grid`/`AI Race`, which refuse to launch and log why),
-and carries the cell itself on `Session::campaign_cell` through to
-`RaceStage::campaign_cell`. `RaceStage::observation` (`crates/game/src/app/race_stage.rs`)
+and carries the cell itself on the launch's `RunContext` (`Session::run`) through to
+the race stage's (`RaceStage::run`). `RaceStage::observation` (`crates/game/src/app/race_stage.rs`)
 evaluates the per-mode value and calls `Cell::evaluate_medal`:
 
 - `Race` and `Time Trial` gate on `finished` - a running position or an

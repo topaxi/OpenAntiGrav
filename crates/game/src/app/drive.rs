@@ -661,7 +661,7 @@ fn state_of(session: &mut Session) -> State {
 
 /// The race the loader was handed; its `title` once it is loaded.
 fn resolved(session: &Session) -> Option<Resolved> {
-    let options = session.race_options.as_ref()?;
+    let options = session.race_options_now()?;
     let race = match &session.stage {
         Stage::Race(stage) => Some(&stage.race),
         _ => None,

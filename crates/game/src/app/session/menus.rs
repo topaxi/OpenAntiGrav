@@ -467,7 +467,7 @@ impl Session {
     /// A stored mode the title does not offer (a `detonator` on a Pulse whose Detonator data no
     /// mod that is on carries) previews and seeds the default mode, as its launch races it.
     pub(crate) fn pending_race(&self) -> crate::pending_race::PendingRace {
-        let launch = self.campaign_cell.as_ref().and(self.race_options.as_ref());
+        let launch = self.launch_cell().and(self.race_options.as_ref());
         let mut pending = crate::pending_race::PendingRace::resolve(&self.settings.race, launch);
         if launch.is_none()
             && let Some(shell) = self.shell.as_ref()
@@ -538,9 +538,9 @@ impl Session {
     /// takes the same path, except on a title whose own chain has no team step
     /// in it ([`picker::skips_team_step`]).
     pub(crate) fn start_race_box(&mut self) {
-        // The RACE page's own race: a cell left over from an abandoned campaign launch must not
-        // make the selection screens read its mode ([`Self::pending_race`]).
-        self.campaign_cell = None;
+        // The RACE page's own race: a run left over from an abandoned campaign launch must not
+        // make the selection screens read its cell's mode ([`Self::pending_race`]).
+        self.end_run();
         let skipped = self
             .shell
             .as_ref()
@@ -694,16 +694,11 @@ impl Session {
         // are no menus before a disc has been chosen, so the `None`
         // here is unreachable in practice and says so rather than
         // unwrapping.
-        // Defensive, not load-bearing on the ordinary path: a campaign
-        // launch abandoned mid-`Team Selection` (`Session::handle_picker`'s
-        // `Kind::Ship` `Event::Back` arm) already clears
-        // `self.campaign_cell`, but clearing it here too means a RACE-page
-        // launch can never inherit a stale cell whatever path reached this
-        // function.
-        self.campaign_cell = None;
-        self.campaign_custom = None;
-        self.campaign_difficulty = None;
-        self.campaign_ai_skill_scale = None;
+        // A new run (ADR-0099). Defensive on the ordinary path: a campaign launch abandoned
+        // mid-`Team Selection` (`Session::handle_picker`'s `Kind::Ship` `Event::Back` arm)
+        // already ended its run, but ending it here too means a RACE-page launch can never
+        // inherit a stale cell whatever path reached this function.
+        self.end_run();
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
@@ -906,7 +901,14 @@ impl Session {
             // Reported rather than fatal: leaving the menus on screen
             // lets the player pick something else, where a vanished
             // window would just look like a crash.
-            Err(e) => error!("cannot start a race: {e:#}"),
+            // The run's snapshot goes with the launch that took it, so it cannot stand in for
+            // the next launch's options.
+            Err(e) => {
+                error!("cannot start a race: {e:#}");
+                if let Some(run) = self.run.as_mut() {
+                    run.options = None;
+                }
+            }
         }
     }
 }

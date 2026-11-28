@@ -9,7 +9,6 @@
 use log::warn;
 
 use crate::app::race_stage::RaceStage;
-use crate::app::stage::Stage;
 use oag_raceplay::tournament::Progress;
 
 use super::Session;
@@ -63,28 +62,8 @@ impl Session {
     /// path of its own, the same choice `MenuOption::RaceAgain` already
     /// makes for its own redirect.
     pub(crate) fn advance_tournament_leg(&mut self) {
-        // The same re-arm `RaceAgain` needs, for the same reason:
-        // `Session::launch_campaign_cell`'s own drain already cleared
-        // `self.campaign_cell` into the *first* leg's `RaceStage`, so a
-        // relaunch with nothing set here would lose the medal evaluation
-        // and `EndRace Rewards`' own `campaign` flag on the next leg.
-        // The skill scale too: the original driver and the campaign
-        // tuning both read it, and a relaunch without it races the cell
-        // at the ambient scale instead.
-        (
-            self.campaign_cell,
-            self.campaign_difficulty,
-            self.campaign_ai_skill_scale,
-            self.campaign_custom,
-        ) = match &self.stage {
-            Stage::Race(stage) => (
-                stage.campaign_cell.clone(),
-                stage.campaign_difficulty,
-                stage.campaign_ai_skill_scale,
-                stage.campaign_custom.clone(),
-            ),
-            _ => (None, None, None, None),
-        };
+        // The finished leg's run again, as `RaceAgain` relaunches it (ADR-0099).
+        self.rerun_race_on_screen();
         let Some(progress) = self.tournament.as_mut() else {
             warn!("ER_NEXT_RACE pressed with no tournament in progress - ignoring");
             return;
@@ -97,7 +76,7 @@ impl Session {
             warn!("the next leg names no track - cannot continue the tournament");
             return;
         };
-        let Some(options) = self.race_options.as_mut() else {
+        let Some(options) = self.run.as_mut().and_then(|run| run.options.as_mut()) else {
             return;
         };
         options.track = Some(track);

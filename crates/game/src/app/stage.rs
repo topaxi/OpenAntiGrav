@@ -748,20 +748,15 @@ impl Stage {
             personal_best: None,
             score_record: None,
             result_saved: false,
-            // Filled in by the caller once this stage is actually handed
-            // off - see `Session::finish_loading`/`finish_race_loading`,
-            // which drain `Session::campaign_cell` into here. Never known
-            // here: this function has no `Session` to read it from.
-            campaign_cell: None,
+            // Moved in by the caller once this stage is handed off (`Session::run`); this
+            // function has no `Session` to read it from.
+            run: crate::app::run_context::RunContext::default(),
             title,
-            campaign_custom: None,
-            campaign_difficulty: None,
-            campaign_ai_skill_scale: None,
             // Not known until the leg itself finishes - see
             // `RaceStage::tournament_final_rank`'s own doc.
             tournament_final_rank: None,
             shared_frame_work: false,
-            // Known here, unlike `campaign_cell` above: `load_event` already
+            // Known here, unlike `run` above: `load_event` already
             // resolved it onto `Loaded` itself, since it has the parsed
             // `SP.xml` `Document` in hand at exactly that point - see
             // `race::Loaded::campaign_2048_event`'s own doc.
@@ -769,7 +764,7 @@ impl Stage {
             xp_banked: None,
             // Built lazily once the race finishes - see
             // `crate::app::session::endrace` and `RaceStage::endrace`'s own
-            // doc. Never known here for the same reason `campaign_cell`
+            // doc. Never known here for the same reason `run`
             // isn't: this function has no `Session` to read a `Shell` from.
             endrace: None,
             // Nothing has been tried yet, so nothing has failed yet - see

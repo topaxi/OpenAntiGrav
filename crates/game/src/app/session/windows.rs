@@ -290,8 +290,10 @@ impl Session {
             || self.window_layout_chosen
             || self.split_lobby.is_some()
             || self.controls.assignment().humans().is_some()
-            || self.campaign_cell.is_some()
-            || self.campaign_difficulty.is_some()
+            || self
+                .run
+                .as_ref()
+                .is_some_and(|run| run.campaign_cell.is_some() || run.campaign_difficulty.is_some())
         {
             return;
         }
