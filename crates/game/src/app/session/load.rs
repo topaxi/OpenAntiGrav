@@ -20,7 +20,7 @@ use super::{BackdropShape, Session};
 impl Session {
     /// Writes the card picture a player changed on the chooser to settings.
     pub(crate) fn keep_launcher_choice(&mut self) {
-        let Stage::Launcher(stage) = &mut self.stage else {
+        let Stage::Launcher(stage) = self.stack.top_mut() else {
             return;
         };
         let Some((card, picture)) = stage.launcher.take_choice() else {
@@ -90,7 +90,7 @@ impl Session {
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;
         self.controls.silence_motors();
-        self.stage = Stage::loading(
+        let loading = Stage::loading(
             &self.gpu,
             prepared.boot_shell,
             Some(prepared.media),
@@ -99,6 +99,7 @@ impl Session {
             self.settings.language.as_deref(),
             self.settings.graphics.hud_safe_area,
         )?;
+        self.stack.replace(loading, None);
         // Kept rather than dropped with the stage: the same screen goes up
         // again for every race this run launches. See `Session::loading_assets`.
         self.loading_assets = assets;
@@ -161,7 +162,7 @@ impl Session {
     /// decoding.
     pub(crate) fn loading_progress(&self) -> (loading::Phase, prefetch::Progress) {
         let progress = self.prefetch_progress();
-        let Stage::Loading(stage) = &self.stage else {
+        let Stage::Loading(stage) = self.stack.top() else {
             return (loading::Phase::Prefetch, progress);
         };
         // **Answered before the prefetch snapshot is consulted at all.** A race
@@ -218,10 +219,10 @@ impl Session {
         // The race path first, and it returns rather than falling through: a
         // race-loading stage carries no `Shell`, so the `None` below would send
         // it back with the screen still up and the circuit already read.
-        if matches!(&self.stage, Stage::Loading(stage) if stage.race.is_some()) {
+        if matches!(self.stack.top(), Stage::Loading(stage) if stage.race.is_some()) {
             return self.finish_race_loading();
         }
-        let (shell, mut media, trace) = match &mut self.stage {
+        let (shell, mut media, trace) = match self.stack.top_mut() {
             Stage::Loading(stage) if stage.screen.is_done() => {
                 let Some(shell) = stage.shell.take() else {
                     return Ok(());
@@ -395,8 +396,9 @@ impl Session {
             .front_end
             .is_some_and(|front_end| front_end.touch_shell().is_some());
         let hud_art = loaded.title.hud_art;
-        self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
-        if let Stage::Frontend(stage) = &mut self.stage {
+        let frontend = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
+        self.stack.replace(frontend, None);
+        if let Stage::Frontend(stage) = self.stack.top_mut() {
             stage.team_hull = hull;
             // A touch front end (2048's) is the player's whole front end, so it takes the
             // SCREEN SIZE control and the inset itself; every other title's boot screens are
@@ -472,19 +474,9 @@ impl Session {
     /// player is put back in the menus rather than dropped out of the game.
     pub(crate) fn launch_race(&mut self) -> Result<()> {
         self.stalled = true;
-        // The LAUNCH RACE row means a fresh race even when one is parked - see
-        // `Session::suspended_race`, which `Session::resume_race` is the way
-        // back to instead. Dropped here rather than left to sit until some
-        // later resize or race end reaches for it.
-        //
-        // **Dropped on a thread of its own**, not here: releasing a whole
-        // race scene's buffers, textures and pipelines measured 86 ms on the
-        // frame thread in a release build on a desktop - the menu frame the
-        // player just pressed LAUNCH RACE on, frozen. See
-        // `docs/architecture/race-load-transition.md`.
-        if let Some(parked) = self.suspended_race.take() {
-            crate::app::race_build::drop_off_thread(parked);
-        }
+        // The LAUNCH RACE row means a fresh race even when one is paused under
+        // the menus (`Session::resume_race` is the way back to that one).
+        self.drop_paused_race();
         // The run's own options on a relaunch, a demo or a benchmark; else the menus' options,
         // snapshotted into the run as the launch saw them (ADR-0099).
         let run = self.run.get_or_insert_default();
@@ -651,20 +643,22 @@ impl Session {
         let plan_ahead = self.net.is_none()
             && self.split_lobby.is_none()
             && self.controls.assignment().humans().is_none();
-        self.start_race_loading(options, options_mode, options_track, plan_ahead)
+        self.start_race_loading(options, options_mode, options_track, plan_ahead, false)
     }
 
     /// The loading screen for `options` and the worker that reads the circuit: the half of a
     /// launch that is the same for a race a player set up and a recording being watched.
     ///
     /// `options_track` is the track file the launch was asked for, before a two-title race routed it
-    /// anywhere; the loading screen is its own.
+    /// anywhere; the loading screen is its own. `over` pushes the load over what is on screen (a
+    /// replay watch); else it takes the place of everything the stack holds.
     pub(crate) fn start_race_loading(
         &mut self,
         options: oag_raceplay::Options,
         options_mode: oag_race::Mode,
         options_track: Option<std::path::PathBuf>,
         plan_ahead: bool,
+        over: bool,
     ) -> Result<()> {
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
@@ -683,7 +677,7 @@ impl Session {
         // way back, but the picture it was last drawing, so `escape` does not
         // flash black waiting for the restarted feed's first frame. See
         // `Session::held_menu_backdrop`.
-        self.held_menu_backdrop = match &mut self.stage {
+        self.held_menu_backdrop = match self.stack.top_mut() {
             Stage::Menu(stage) => stage
                 .backdrop
                 .as_mut()
@@ -754,7 +748,7 @@ impl Session {
                 }
             });
         self.controls.silence_motors();
-        self.stage = Stage::race_loading(
+        let loading = Stage::race_loading(
             &self.gpu,
             worker,
             music,
@@ -773,6 +767,12 @@ impl Session {
             track_loading.as_ref(),
             card,
         )?;
+        let run = self.run.as_ref().map(|run| run.id);
+        if over {
+            self.stack.push(loading, run);
+        } else {
+            drop(self.stack.replace_all(loading, run));
+        }
         Ok(())
     }
 
@@ -798,7 +798,7 @@ impl Session {
     /// worker to poll, and once [`LoadingStage::built_race`] is `Some`.
     pub(crate) fn advance_race_build(&mut self) {
         // Read before the `Stage::Loading` borrow below, the same reason
-        // `Session::frame` reads it before its own `match &mut self.stage`:
+        // `Session::frame` reads it before its own `match self.stack.top_mut()`:
         // both take `&self` as a whole.
         let pvs_culling = self.pvs_culling();
         let render_profile = self.render_profile();
@@ -807,7 +807,7 @@ impl Session {
         let ai_difficulty = crate::app::args::resolve_difficulty(&self.settings);
         let open_windows = self.open_windows();
         let wanted_layout = self.window_layout.clone();
-        let Stage::Loading(stage) = &mut self.stage else {
+        let Stage::Loading(stage) = self.stack.top_mut() else {
             return;
         };
         if stage.built_race.is_some() {
@@ -900,7 +900,6 @@ impl Session {
                                 self.notice = Some(super::shot_open::Notice::mods(differ));
                             }
                             self.viewer = Some(active);
-                            self.return_to_replays = false;
                             self.shot_pending = false;
                         }
                         Err(e) => join_error = Some(e),
@@ -1027,6 +1026,10 @@ impl Session {
                 }
             }
             if let Some(e) = join_error {
+                // The run goes back to pending, so the failed load below ends it as it would any.
+                if let Ok(race_stage) = &mut result {
+                    self.run = Some(std::mem::take(&mut race_stage.run));
+                }
                 result = Err(RaceBuildError::Load(e));
             }
             if let Some(probe) = self.load_probe.as_mut() {
@@ -1122,7 +1125,7 @@ impl Session {
         // A LAN race starts when the host says so, with every seat loaded: the loading screen
         // stays up until then (`NetPlay::poll_start`).
         if let Some(net) = &self.net
-            && matches!(&self.stage, Stage::Loading(stage)
+            && matches!(self.stack.top(), Stage::Loading(stage)
                 if stage.screen.is_done() && stage.built_race.as_ref().is_some_and(Result::is_ok))
         {
             match net.poll_start() {
@@ -1134,7 +1137,7 @@ impl Session {
                 }
             }
         }
-        let Some((built, music)) = (match &mut self.stage {
+        let Some((built, music)) = (match self.stack.top_mut() {
             Stage::Loading(stage)
                 if stage.screen.is_done()
                     && stage
@@ -1180,7 +1183,7 @@ impl Session {
                 // next unrelated race (`docs/architecture/navigation-map.md`, "A leg that will
                 // not load"). What a mod campaign event replaced in the menus' options goes
                 // back first.
-                self.end_run();
+                let origin = self.end_run().and_then(|run| run.origin);
                 // A benchmark that would not load gives the player's own run back.
                 self.abandon_benchmark_launch();
                 // A demo that would not load ends a `--demo` chain rather than retrying it.
@@ -1196,7 +1199,11 @@ impl Session {
                     self.replay_refused
                         .insert(watching.path, crate::replays::page::refusal(&e));
                 }
-                return self.open_menus();
+                // A watch pushed over a finished race pops back to it.
+                if self.pop_watch(origin) {
+                    return Ok(());
+                }
+                return self.open_menus_from(origin);
             }
             Err(RaceBuildError::Gpu(e)) => return Err(e),
         };
@@ -1209,7 +1216,8 @@ impl Session {
                 ready_at.elapsed()
             );
         }
-        self.stage = Stage::Race(race_stage);
+        let run = Some(race_stage.run.id);
+        drop(self.stack.replace(Stage::Race(race_stage), run));
         // Never inherited from whatever race was on screen before this one -
         // see `Session::paused`.
         self.pause = crate::pause::State::Running;
@@ -1231,7 +1239,7 @@ impl Session {
         // so this should now read near-instant rather than the 2.83s a cold
         // PS2 track measured before the worker existed.
         self.hold_race_song();
-        if let (Stage::Race(stage), Some(title)) = (&self.stage, self.title_raced()) {
+        if let (Stage::Race(stage), Some(title)) = (self.stack.top(), self.title_raced()) {
             crate::sound::arm_rear_low_pass(&mut self.audio, title, stage.race.track_emitters());
         }
         self.arm_rumble();

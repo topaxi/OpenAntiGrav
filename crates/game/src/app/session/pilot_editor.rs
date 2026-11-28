@@ -235,7 +235,7 @@ impl Session {
     /// siblings use throughout this crate.
     pub(crate) fn resupply_pilot_bounds(&mut self) {
         let roster = &self.pilot_roster;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             resupply_bounds(&mut stage.menu, roster);
         }
     }
@@ -256,7 +256,7 @@ impl Session {
     /// a write that did not happen is not worth losing the player's place in
     /// the menus over.
     pub(crate) fn save_pilot(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let model = &stage.menu;
@@ -310,7 +310,7 @@ impl Session {
     /// auto-named `pilot-1`, `pilot-2`, ... - the create-from-template flow
     /// that keeps this cut free of text entry.
     pub(crate) fn new_pilot(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(source_name) = held_text(&stage.menu, "pilot.selected") else {
@@ -401,7 +401,7 @@ impl Session {
                 RenameModel::Keyboard(prompt::Keyboard::new(labels, &name, pilots::MAX_NAME))
             }
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             let purpose = Purpose::RenamePilot { from: name };
             stage.prompt = Some(match model {
                 RenameModel::Keyboard(keyboard) => Prompt::typing(purpose, keyboard),
@@ -517,7 +517,7 @@ impl Session {
             yes: say(self.table(), "OAG_PILOT_DELETE_YES", "DELETE"),
             no: say(self.table(), "OAG_PILOT_DELETE_NO", "KEEP"),
         });
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(Prompt::asking(Purpose::DeletePilot { name }, confirm));
         }
     }
@@ -530,7 +530,7 @@ impl Session {
 
     /// Whatever PILOT currently holds, or `None` off the AI PILOTS page.
     fn selected_pilot(&self) -> Option<String> {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return None;
         };
         held_text(&stage.menu, "pilot.selected")
@@ -637,7 +637,7 @@ impl Session {
     /// Whether a desk key may type `c` into the open prompt: its own grid's alphabet, so
     /// the desk and the grid cannot build different text.
     pub(crate) fn typing_accepts(&self, c: char) -> bool {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Menu(stage) => stage.prompt.as_ref().map_or_else(
                 || oag_ui_screens::prompt::accepts(c),
                 |prompt| prompt.accepts(c),
@@ -653,10 +653,10 @@ impl Session {
     /// Read by `app.rs` before it decides whether a raw key event is text or
     /// a game button. See [`crate::app::typing`].
     pub(crate) fn typing_is_open(&self) -> bool {
-        if let Stage::Launcher(stage) = &self.stage {
+        if let Stage::Launcher(stage) = self.stack.top() {
             return stage.launcher.typing_is_open();
         }
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return false;
         };
         stage
@@ -668,7 +668,7 @@ impl Session {
     /// A file is being dragged over the window (`true`) or has left it. Only
     /// the chooser says anything about it.
     pub(crate) fn file_hover(&mut self, over: bool) {
-        if let Stage::Launcher(stage) = &mut self.stage {
+        if let Stage::Launcher(stage) = self.stack.top_mut() {
             stage.launcher.set_hovering(over);
         }
     }
@@ -677,7 +677,7 @@ impl Session {
     /// image; the main menu and the attract demo take a screenshot of ours
     /// (`session::shot_open`); every other stage leaves it alone.
     pub(crate) fn file_dropped(&mut self, path: &std::path::Path) {
-        if let Stage::Launcher(stage) = &mut self.stage {
+        if let Stage::Launcher(stage) = self.stack.top_mut() {
             if stage.picked.is_none() {
                 stage.picked = stage.launcher.dropped(path);
             }
@@ -688,7 +688,7 @@ impl Session {
 
     /// Ctrl+V while the chooser's disc-key prompt is open: asks it to paste.
     pub(crate) fn request_paste(&mut self) {
-        if let Stage::Launcher(stage) = &mut self.stage {
+        if let Stage::Launcher(stage) = self.stack.top_mut() {
             stage.launcher.request_paste();
         }
     }
@@ -700,7 +700,7 @@ impl Session {
     /// call site in `app.rs` for why that distinction is what keeps the arrow
     /// keys navigating the grid.
     pub(crate) fn typed(&mut self, typed: crate::app::typing::Typed) -> bool {
-        if let Stage::Launcher(stage) = &mut self.stage {
+        if let Stage::Launcher(stage) = self.stack.top_mut() {
             return match typed {
                 crate::app::typing::Typed::Edit(oag_ui_screens::prompt::Edit::Type(c)) => {
                     stage.launcher.type_digit(c);
@@ -717,7 +717,7 @@ impl Session {
                 crate::app::typing::Typed::Ignore => false,
             };
         }
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return false;
         };
         let Some(prompt) = stage.prompt.as_mut() else {
@@ -748,7 +748,7 @@ impl Session {
     /// An associated function taking the stage rather than a method on
     /// `&mut Session`, for [`resupply_bounds`]' reason one step further out:
     /// the caller in [`super::frame`] is already inside a `match &mut
-    /// self.stage`, so the stage arrives borrowed and `self` cannot be.
+    /// self.stack`, so the stage arrives borrowed and `self` cannot be.
     ///
     /// Returns what to act on once that borrow is over - see
     /// [`Session::finish_prompt`].
@@ -836,11 +836,11 @@ impl Session {
         let roster = self.pilot_roster.clone();
         // `self.shell.as_ref()...` rather than `self.table()`: the latter
         // borrows all of `self` for as long as the `&StringTable` it returns
-        // is alive, which would collide with the `&mut self.stage` below.
+        // is alive, which would collide with the `self.stack.top_mut()` below.
         // Projecting the field directly keeps the borrow checker's view of
         // the two as disjoint, which they are.
         let strings = self.shell.as_ref().map(|shell| &shell.strings);
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             supply_pilot_choices(&mut stage.menu, &roster, select, strings);
         }
     }
@@ -899,7 +899,7 @@ fn rename_note(
 
 /// The PILOT supply [`Session::supply_pilot_menu`] does, without needing
 /// `&mut Session` - shared with [`Session::reload_pilot_roster`], which
-/// already holds a disjoint borrow of `self.stage` by the time it needs this.
+/// already holds a disjoint borrow of `self.stack` by the time it needs this.
 ///
 /// `select`, when given, moves PILOT onto that name **after** the list is
 /// supplied and **before** LOW/HIGH are resupplied - `create-from-template`

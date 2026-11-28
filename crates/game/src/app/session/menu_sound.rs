@@ -140,7 +140,7 @@ impl Session {
     /// refusal the way `handle_campaign` makes it and decides nothing.
     pub(crate) fn campaign_nav(&self, event: Event) -> Option<Nav> {
         let refused = event == Event::Confirmed
-            && matches!(&self.stage, Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
+            && matches!(self.stack.top(), Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
                 |campaign| match &campaign.screen {
                     Screen::Grid(model) => !campaign.grid_is_unlocked(model.index()),
                     Screen::Cell { model, .. } => model.selected_is_locked(),
@@ -153,7 +153,7 @@ impl Session {
         // silence. Chosen, not measured - the original has no such refusal.
         let unlaunchable = event == Event::Confirmed
             && !refused
-            && matches!(&self.stage, Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
+            && matches!(self.stack.top(), Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
                 |campaign| match &campaign.screen {
                     Screen::Cell { model, .. } => model.selected().is_some_and(|cell| {
                         // A mod event's own track file plans against itself; a

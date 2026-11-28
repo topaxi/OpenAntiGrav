@@ -78,7 +78,7 @@ impl Session {
 
     fn push_page(&mut self, id: &str) {
         debug!("Launch 2048: opening this build's {id} page");
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && !stage.menu.push(id)
         {
             log::warn!("the menu tree has no page {id:?}; staying on the root");

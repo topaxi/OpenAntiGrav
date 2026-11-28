@@ -502,7 +502,10 @@ impl App {
             idle: Default::default(),
             gpu,
             framebuffer,
-            stage,
+            stack: {
+                let run = stage.own_run();
+                crate::app::activity_stack::ActivityStack::new(stage, run)
+            },
             controls,
             pad_dir: None,
             pointer: crate::app::pointer::Window::default(),
@@ -572,7 +575,6 @@ impl App {
             notice: None,
             shot_cli: self.replay_png.clone(),
             shot_pending: false,
-            return_to_replays: false,
             rumbler: None,
             wall: 0.0,
             go_at: None,
@@ -657,7 +659,6 @@ impl App {
             backdrop: None,
             backdrop_shape: None,
             held_menu_backdrop: None,
-            parked_menu: None,
             // Nothing running yet on either line: the conversion may not start
             // until the boot's own movies are done with the cache, which is
             // what `start_prefetch` waits for.
@@ -669,7 +670,6 @@ impl App {
             load_probe: self
                 .measure_race_load
                 .and_then(crate::app::session::LoadProbe::new),
-            suspended_race: None,
             custom_campaign: None,
             pure_chain_class: 0,
             split_lobby: None,

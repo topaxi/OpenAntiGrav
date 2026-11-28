@@ -538,7 +538,8 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
 
 /// HD's `EndRace Menu` offers WATCH REPLAY under VIEW RESULTS AGAIN (`docs/ui/replays.md`,
 /// "The end-of-race row"): a time trial flown to its end, the pointer on the row and a click, the
-/// race just finished plays in the viewer and leaving it lands on REPLAYS.
+/// race just finished plays in the viewer, and leaving it is back on that race's end menu (the
+/// watch was pushed over the finished race, ADR-0099).
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn hd_end_of_race_menu_watches_the_race_just_finished() {
@@ -558,14 +559,22 @@ fn hd_end_of_race_menu_watches_the_race_just_finished() {
              until screen.id=ship-select; press cross; until stage=race within 4000; ticks 300; \
              until endrace=other within 20000; ticks 100; press cross; ticks 100; \
              screenshot DIR/shots/menu.png; {row}until replay=playing within 4000; ticks 60; \
-             screenshot DIR/shots/playing.png; escape; until page=replays within 400; quit"
+             screenshot DIR/shots/playing.png; escape; \
+             until endrace_option=OAG_ENDRACE_WATCH_REPLAY within 400; ticks 10; \
+             screenshot DIR/shots/back.png; quit"
         ),
         &["--autopilot"],
     );
     assert!(status.success());
     assert_eq!(profile.replays().len(), 1, "the race just flown, in auto/");
     let last = states.last().expect("state lines");
-    assert_eq!(text(last, "page"), Some("replays"));
+    assert_eq!(text(last, "stage"), Some("race"), "{last}");
+    assert!(
+        states
+            .iter()
+            .all(|state| text(state, "page") != Some("replays")),
+        "the watch did not land on REPLAYS"
+    );
 }
 
 /// A campaign race recorded from the menus, as WATCH REPLAY at its end opens it, rebuilds from

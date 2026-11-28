@@ -20,7 +20,7 @@ impl Session {
     /// and builds the runtime. Any failure marks the race
     /// `endrace_unavailable` so the built-in results table stays, and says why.
     pub(super) fn build_endrace_touch(&mut self) {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         let (Some(shell), Some(race_options)) = (self.shell.as_ref(), self.race_options.as_ref())
@@ -125,7 +125,7 @@ impl Session {
             scales,
         ) {
             Ok(runtime) => {
-                if let Stage::Race(stage) = &mut self.stage {
+                if let Stage::Race(stage) = self.stack.top_mut() {
                     stage.endrace = Some(EndRace::Touch(Box::new(runtime)));
                 }
             }
@@ -155,7 +155,7 @@ impl Session {
                 presses.push(press);
             }
         }
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(EndRace::Touch(runtime)) = stage.endrace.as_mut() else {
@@ -185,7 +185,7 @@ impl Session {
     /// the one path every launch uses. A race that was not an event (the RACE
     /// page, a mod's race page) relaunches on the options it ran with.
     fn restart_event(&mut self) {
-        let event = match &self.stage {
+        let event = match self.stack.top() {
             Stage::Race(stage) => stage.campaign_2048_event.as_ref().map(|p| p.name.clone()),
             _ => None,
         };

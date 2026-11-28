@@ -6,7 +6,7 @@
 //! stops at the front end. Every function here is a free function or an
 //! associated one taking the stage apart from `self`, for the reason
 //! `Session::tick_prompt` gives: the caller in `session::frame` is already
-//! inside a `match &mut self.stage`, so the stage arrives borrowed and
+//! inside a `match self.stack.top_mut()`, so the stage arrives borrowed and
 //! `self` cannot be.
 //!
 //! # The order is the pad's order

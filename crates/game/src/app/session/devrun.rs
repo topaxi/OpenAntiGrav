@@ -80,7 +80,7 @@ impl Session {
         let Some(people) = self.dev.preseat else {
             return false;
         };
-        let ready = matches!(&self.stage, Stage::Menu(stage)
+        let ready = matches!(self.stack.top(), Stage::Menu(stage)
             if stage.join.is_none() && stage.layout.is_none() && stage.picker.is_none())
             && self.shell.is_some();
         if !ready {
@@ -88,7 +88,7 @@ impl Session {
         }
         self.dev.preseat = None;
         self.mp_devices = devrun::placeholder_devices(people);
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.push("multiplayer");
         }
         info!("preseat: {people} people on placeholder devices");
@@ -99,7 +99,7 @@ impl Session {
 
     /// The stage, and for the menus the screen over them, as the log names it.
     fn dev_stage_name(&self) -> String {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Launcher(_) => "launcher".into(),
             Stage::Loading(_) => "loading".into(),
             Stage::Frontend(_) => "frontend".into(),

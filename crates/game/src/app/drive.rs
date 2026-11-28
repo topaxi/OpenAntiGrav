@@ -274,7 +274,7 @@ impl Driver {
                 let value = Value::Text(value.clone());
                 self.session.apply_setting(setting, &value);
                 // A page that is open shows the row's old value until it is told.
-                if let Stage::Menu(stage) = &mut self.session.stage {
+                if let Stage::Menu(stage) = self.session.stack.top_mut() {
                     stage.menu.seed(setting, &value);
                 }
                 self.frame(None)?;
@@ -562,10 +562,10 @@ fn stage_name(stage: &Stage) -> &'static str {
 fn state_of(session: &mut Session) -> State {
     let mut state = State {
         tick: session.clock.tick(),
-        stage: stage_name(&session.stage).to_string(),
+        stage: stage_name(session.stack.top()).to_string(),
         ..State::default()
     };
-    match &session.stage {
+    match session.stack.top() {
         Stage::Frontend(stage) => {
             state.frontend = stage.frontend.machine().current().map(str::to_string);
             state.map_event = stage
@@ -596,8 +596,8 @@ fn state_of(session: &mut Session) -> State {
     }
     // The race a launch handed the loader: from the race's own loading screen on. Before that
     // `race_options` is what the menus last wrote, which a pick still open may not have reached.
-    if matches!(&session.stage, Stage::Race(_))
-        || matches!(&session.stage, Stage::Loading(stage) if stage.race.is_some())
+    if matches!(session.stack.top(), Stage::Race(_))
+        || matches!(session.stack.top(), Stage::Loading(stage) if stage.race.is_some())
     {
         state.race = resolved(session);
     }
@@ -619,7 +619,7 @@ fn state_of(session: &mut Session) -> State {
         .notice
         .as_ref()
         .map(|notice| notice.text().to_string());
-    if let Stage::Race(stage) = &session.stage {
+    if let Stage::Race(stage) = session.stack.top() {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();
         state.photo_job = session.photo_fx_name().map(|_| session.photo_job_name());
@@ -631,6 +631,11 @@ fn state_of(session: &mut Session) -> State {
             .endrace
             .as_ref()
             .map(|endrace| if endrace.is_photo() { "photo" } else { "other" }.to_string());
+        if let Some(menu) = stage.endrace.as_ref().and_then(|e| e.menu_on_screen()) {
+            let id = |option: oag_ui_screens::endrace::MenuOption| option.idstring().to_string();
+            state.endrace_options = Some(menu.options().iter().copied().map(id).collect());
+            state.endrace_option = menu.selected().map(id);
+        }
         state.hash = Some(format!("{:016x}", stage.race.core.sim.state_hash()));
         state.sim_tick = Some(stage.race.core.sim.world.tick);
         state.pilot_assist = Some(stage.race.core.sim.pilot_assist_level().name().to_string());
@@ -646,11 +651,17 @@ fn state_of(session: &mut Session) -> State {
             .to_string(),
         );
     }
-    state.tournament = session
+    let progress = session
         .current_run()
-        .and_then(|run| run.tournament.as_ref())
-        .map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
-    state.demo = match &session.stage {
+        .and_then(|run| run.tournament.as_ref());
+    state.tournament =
+        progress.map(|progress| format!("{}/{}", progress.leg_number(), progress.leg_count()));
+    state.tournament_points = progress.map(|progress| {
+        (0..oag_gameplay::MAX_SHIPS)
+            .map(|slot| progress.points(slot))
+            .sum()
+    });
+    state.demo = match session.stack.top() {
         Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),
         Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
         _ => None,
@@ -662,7 +673,7 @@ fn state_of(session: &mut Session) -> State {
 /// The race the loader was handed; its `title` once it is loaded.
 fn resolved(session: &Session) -> Option<Resolved> {
     let options = session.race_options_now()?;
-    let race = match &session.stage {
+    let race = match session.stack.top() {
         Stage::Race(stage) => Some(&stage.race),
         _ => None,
     };
@@ -685,7 +696,7 @@ fn resolved(session: &Session) -> Option<Resolved> {
         }),
         source: options.source.clone(),
         craft_source: options.craft_source.clone(),
-        title: matches!(session.stage, Stage::Race(_))
+        title: matches!(session.stack.top(), Stage::Race(_))
             .then(|| {
                 session
                     .shell

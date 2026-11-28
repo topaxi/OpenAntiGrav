@@ -8,6 +8,7 @@ use oag_ui::frontend;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
+mod activity_stack;
 mod args;
 mod campaign_editor_stage;
 mod campaign_stage;

@@ -132,7 +132,7 @@ impl Session {
         };
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             if let Some(mut model) = reopened {
                 model.settle();
                 stage.menu = model;
@@ -290,7 +290,7 @@ impl Session {
         let substitution = substitution(title.prompts, family, exchange, &|button| {
             controls.bound_keys(button)
         });
-        match &mut self.stage {
+        match self.stack.top_mut() {
             Stage::Frontend(stage) => stage.renderer.set_prompt_substitution(substitution),
             Stage::Menu(stage) => stage.renderer.set_prompt_substitution(substitution),
             Stage::Race(stage) => {

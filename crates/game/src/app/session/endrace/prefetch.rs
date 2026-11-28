@@ -173,7 +173,7 @@ impl Session {
     /// The inputs of [`EndRacePrepArgs::run`] for the race on screen, `None` when there is no
     /// shell to read them from (`--race`) or the title's flow is the touch one.
     pub(crate) fn endrace_prep_args(&self) -> Option<EndRacePrepArgs> {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return None;
         };
         let shell = self.shell.as_ref()?;
@@ -222,7 +222,7 @@ impl Session {
     /// frame the race runs. A no-op on every later frame, on a finished race and where there is
     /// nothing to build.
     pub(crate) fn start_endrace_prefetch(&mut self) {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         if stage.endrace_prefetch_started || stage.race.core.sim.finished() {
@@ -234,7 +234,7 @@ impl Session {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let args = self.endrace_prep_args();
-            let Stage::Race(stage) = &mut self.stage else {
+            let Stage::Race(stage) = self.stack.top_mut() else {
                 return;
             };
             stage.endrace_prefetch = args.map(|args| {
@@ -245,7 +245,7 @@ impl Session {
                 })
             });
         }
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         stage.endrace_prefetch_started = true;
@@ -254,7 +254,7 @@ impl Session {
     /// The prepared screens: the worker's when it ran and succeeded, else built here. `None`
     /// when they cannot be built, which has been said already.
     pub(super) fn take_endrace_prep(&mut self) -> Option<EndRacePrep> {
-        let task = match &mut self.stage {
+        let task = match self.stack.top_mut() {
             Stage::Race(stage) => stage.endrace_prefetch.take(),
             _ => None,
         };

@@ -100,7 +100,6 @@ fn mid_tournament_menu_opens_on_next_race() {
 const PLAIN: super::WatchReplayOffer = super::WatchReplayOffer {
     recorded: true,
     original_menu: false,
-    tournament_next_leg: false,
     networked: false,
 };
 
@@ -121,17 +120,12 @@ fn watch_replay_is_offered_on_pulse_and_hd_recorded_races() {
             original_menu: true,
             ..PLAIN
         };
-        let mid_tournament = WatchReplayOffer {
-            tournament_next_leg: true,
-            ..PLAIN
-        };
         let networked = WatchReplayOffer {
             networked: true,
             ..PLAIN
         };
         assert!(!not_recorded.on(dialect));
         assert!(!compare_shot.on(dialect));
-        assert!(!mid_tournament.on(dialect));
         assert!(!networked.on(dialect));
     }
     assert!(!PLAIN.on(Some(Touch)));

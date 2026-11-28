@@ -535,7 +535,8 @@ grid (position and finish time, one row per craft, the player's own row
 highlighted); `EndRace Menu` - the applicable `race_again`/`return_to_grid`/
 `return_to_menu`/`view_again` options, each at its own authored `<Block>`
 position, with this build's [WATCH REPLAY](replays.md#the-end-of-race-row) block under them in a live
-race. `EndRace Podium` draws too (2026-10-06, `--menu-page endrace-podium`
+race. Leaving the replay it opens is back on this menu, cursor on the row, mid-Tournament too (the
+watch is pushed over the finished race, ADR-0099). `EndRace Podium` draws too (2026-10-06, `--menu-page endrace-podium`
 only): the winner in the middle column, second left, third right, at the
 positions the slot setter computes, plinths included - see the formats page.
 The original enters it from its multiplayer race managers only, so the live

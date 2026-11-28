@@ -53,7 +53,7 @@ impl Session {
     ///
     /// The launcher, the boot reel, the loading wave, the menus and the pause
     /// menu all count as front end. The pause menu is a `Stage::Menu` over a
-    /// held backdrop picture with the race parked in `suspended_race`, so no
+    /// held backdrop picture with the race parked in `ActivityStack::paused_race`, so no
     /// race scene is being drawn behind it (**chosen, not measured**). A race
     /// that is still building is already `Stage::Race` and keeps the race limit.
     /// Under `Vsync::On` [`Session::frame_period`] returns before this is read,
@@ -63,7 +63,7 @@ impl Session {
             return limit.resolve(self.display.hz());
         }
         let limit = self.configured_limit();
-        match self.stage {
+        match self.stack.top() {
             Stage::Race(_) => limit,
             _ => limit.front_end(),
         }
@@ -146,7 +146,7 @@ impl Session {
             self.display
                 .report(self.gpu.output.window.refresh_millihertz());
         }
-        let racing = matches!(self.stage, Stage::Race(_));
+        let racing = matches!(self.stack.top(), Stage::Race(_));
         let mode = self.gpu.output.config.present_mode;
         let configures = self.gpu.output.configures;
         if display_evidence_is_stale(
@@ -182,7 +182,7 @@ impl Session {
                 );
             }
             let labels = self.rate_labels();
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = self.stack.top_mut() {
                 for (setting, value, label) in &labels {
                     stage.menu.relabel_choice(setting, value, label);
                 }

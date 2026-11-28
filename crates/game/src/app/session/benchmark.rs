@@ -114,19 +114,19 @@ impl Session {
     /// Whether the menus being opened (or open) sit over a race that is kept: a benchmark
     /// replaces the race it is started over, so its rows are not offered then.
     pub(crate) fn race_is_parked_behind_menus(&self) -> bool {
-        self.suspended_race.is_some()
-            || matches!(&self.stage, Stage::Race(stage)
+        self.stack.paused_race().is_some()
+            || matches!(self.stack.top(), Stage::Race(stage)
                 if stage.benchmark.is_none() && !stage.race.core.sim.finished())
     }
 
     /// Whether the stage on screen is a benchmark's: its race or its stats screen.
     pub(crate) fn on_benchmark(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if stage.benchmark.is_some())
+        matches!(self.stack.top(), Stage::Race(stage) if stage.benchmark.is_some())
     }
 
     /// Whether the race on screen is a benchmark that has not ended.
     pub(crate) fn in_benchmark(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage)
+        matches!(self.stack.top(), Stage::Race(stage)
             if stage.benchmark.as_ref().is_some_and(|live| live.done.is_none()))
     }
 
@@ -138,13 +138,13 @@ impl Session {
 
     /// Whether the stats screen is up.
     pub(crate) fn on_benchmark_screen(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage)
+        matches!(self.stack.top(), Stage::Race(stage)
             if stage.benchmark.as_ref().is_some_and(|live| live.done.is_some()))
     }
 
     /// Where the benchmark is, for a script that waits on it: `loading`, `running` or `stats`.
     pub(crate) fn benchmark_phase(&self) -> Option<&'static str> {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => stage.benchmark.as_ref().map(|live| {
                 if live.done.is_some() {
                     "stats"
@@ -169,7 +169,7 @@ impl Session {
         };
         let mods_on_offer = self.benchmark_mods_on_offer();
         let page = self.benchmark.page.clone();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let menu = &mut stage.menu;
@@ -195,7 +195,7 @@ impl Session {
     /// START BENCHMARK, or the menu without the options page: starts the benchmark the page's
     /// rows ask for, and remembers the page it came from for the stats screen's BACK.
     pub(crate) fn start_benchmark_from_menu(&mut self) {
-        let origin = match &self.stage {
+        let origin = match self.stack.top() {
             Stage::Menu(stage)
                 if stage
                     .menu
@@ -264,7 +264,7 @@ impl Session {
         };
         // The page BACK returns to is the one the benchmark row was fired from; the options page
         // is reopened by firing the row again.
-        let trail = match &self.stage {
+        let trail = match self.stack.top() {
             Stage::Menu(stage) => stage
                 .menu
                 .trail()
@@ -387,7 +387,7 @@ impl Session {
     /// One drawn frame of a benchmark race: `frame_seconds` is what the performance meter was
     /// fed (`None` on a frame that carried a load), `ticks` the simulation steps it took.
     pub(crate) fn record_benchmark_frame(&mut self, frame_seconds: Option<f32>, ticks: u32) {
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         let (Some(live), Some(seconds)) = (stage.benchmark.as_mut(), frame_seconds) else {
@@ -410,7 +410,7 @@ impl Session {
         rect: (f32, f32, f32, f32),
         back: Button,
     ) -> bool {
-        if matches!(&self.stage, Stage::Menu(_))
+        if matches!(self.stack.top(), Stage::Menu(_))
             && self.benchmark.cli.is_some()
             && self.benchmark.launching.is_none()
             && self.attract_eligible()
@@ -423,7 +423,7 @@ impl Session {
             self.escape_benchmark();
             return true;
         }
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return false;
         };
         let Some(live) = stage.benchmark.as_mut() else {
@@ -470,7 +470,7 @@ impl Session {
         let backward = take(Button::Left) | take(Button::Up);
         let confirmed = take(Button::Cross) | take(Button::Start);
         let left_back = take(back);
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return false;
         };
         let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) else {
@@ -518,7 +518,7 @@ impl Session {
 
     /// COPY TO CLIPBOARD: puts the result's text on the clipboard and shows how it went.
     fn copy_benchmark_result(&mut self) {
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) else {
@@ -534,7 +534,7 @@ impl Session {
 
     /// Puts the write's answer on the button when it arrives, and takes it off in time.
     fn age_copy_label(&mut self) {
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         if let Some(done) = stage.benchmark.as_mut().and_then(|live| live.done.as_mut()) {
@@ -543,7 +543,7 @@ impl Session {
     }
 
     fn benchmark_origin(&self) -> Origin {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => stage
                 .benchmark
                 .as_ref()
@@ -554,7 +554,7 @@ impl Session {
 
     /// What to launch again: where it started from, what it was asked for and the tick cap.
     fn benchmark_run(&self) -> (Origin, Request, u32) {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => stage.benchmark.as_ref().map_or_else(
                 || (Origin::Extras, Request::default(), plan::TICK_CAP),
                 |live| (live.origin, live.request.clone(), live.tick_cap),
@@ -592,7 +592,7 @@ impl Session {
             self.quit = true;
             return;
         }
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && !trail.is_empty()
         {
             stage.menu.restore_trail(&trail);
@@ -608,7 +608,7 @@ impl Session {
         if let Some(path) = &saved {
             info!("benchmark result written to {path}");
         }
-        if let Stage::Race(stage) = &mut self.stage
+        if let Stage::Race(stage) = self.stack.top_mut()
             && let Some(live) = stage.benchmark.as_mut()
         {
             let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
@@ -678,7 +678,7 @@ impl Session {
     }
 
     fn benchmark_report(&self) -> Option<Report> {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return None;
         };
         let live = stage.benchmark.as_ref()?;

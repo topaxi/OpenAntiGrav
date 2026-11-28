@@ -40,7 +40,7 @@ impl Session {
         {
             use crate::app::window_layout_stage::WindowLayoutStage;
             use oag_ui_screens::window_layout::{Labels, Picker};
-            if join.lobby().count() < 2 || !matches!(self.stage, Stage::Menu(_)) {
+            if join.lobby().count() < 2 || !matches!(self.stack.top(), Stage::Menu(_)) {
                 return Some(join);
             }
             let Some(shell) = self.shell.as_ref() else {
@@ -62,7 +62,7 @@ impl Session {
                 self.starting_fullscreen(),
             )
             .one_window_only(one_window);
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = self.stack.top_mut() {
                 stage.layout = Some(WindowLayoutStage::new(join, picker));
             }
             None
@@ -72,7 +72,7 @@ impl Session {
     /// One tick of the open screen: pad and keyboard, then the pointer.
     pub(crate) fn tick_window_layout(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let roles = self.roles();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.layout.as_mut() else {
@@ -82,7 +82,7 @@ impl Session {
         let mut events = open.screen_mut().update(self.controls.buttons_mut());
         events.extend(open.screen_mut().pointer(pointer, &stage.skin));
         for event in events {
-            if !matches!(self.stage, Stage::Menu(ref stage) if stage.layout.is_some()) {
+            if !matches!(self.stack.top(), Stage::Menu(stage) if stage.layout.is_some()) {
                 break;
             }
             self.handle_window_layout(event);
@@ -100,7 +100,7 @@ impl Session {
         match event {
             Event::Moved | Event::Changed => self.play_navs(Some(Nav::Moved(None))),
             Event::Back => {
-                if let Stage::Menu(stage) = &mut self.stage
+                if let Stage::Menu(stage) = self.stack.top_mut()
                     && let Some(open) = stage.layout.take()
                 {
                     stage.join = Some(open.into_join());
@@ -114,7 +114,7 @@ impl Session {
     /// START: the layout is applied and remembered, and the flow goes on
     /// ([`Session::continue_multiplayer`]) with the lobby the join screen made.
     fn finish_window_layout(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.layout.take() else {
@@ -286,7 +286,7 @@ impl Session {
     /// Moves a DISPLAY page row to `value`, for a setting the layout screen wrote, so the page
     /// does not show what it held before.
     fn seed_display_row(&mut self, setting: &str, value: String) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.seed(setting, &oag_ui::menu::Value::Text(value));
         }
     }
@@ -297,7 +297,7 @@ impl Session {
     /// nothing has been dealt yet and they only had holding frames.
     fn drop_screens_beyond(&mut self, count: usize) {
         while self.screens.len() + 1 > count {
-            if self.suspended_race.is_some() {
+            if self.stack.paused_race().is_some() {
                 self.close_screen(self.screens.len() - 1);
             } else if let Some(screen) = self.screens.pop() {
                 self.focus.forget(screen.output.window.id());

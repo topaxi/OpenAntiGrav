@@ -62,7 +62,7 @@ impl Session {
         // `Launch Game` is checked here rather than in the tick loop - the row
         // lighting up is drawn before the load stalls the window.
         self.keep_launcher_choice();
-        let picked = match &mut self.stage {
+        let picked = match self.stack.top_mut() {
             Stage::Launcher(stage) => {
                 stage.poll_art();
                 stage.picked.take()
@@ -97,7 +97,7 @@ impl Session {
         // from the title screen (the web build reloads the page) would
         // otherwise be asked again. Here rather than in the picker because
         // `menu.rs` and `frontend.rs` stay ignorant of where settings live.
-        if let Stage::Frontend(stage) = &self.stage
+        if let Stage::Frontend(stage) = self.stack.top()
             && let Some(language) = stage.frontend.chosen()
             && self.settings.language.as_deref() != Some(language)
         {
@@ -113,7 +113,7 @@ impl Session {
         // gets us here is still spelled the way the disc spells it while what it
         // reaches is not a recovered screen at all. See `oag_ui::menu`.
         if !self.launched
-            && matches!(&self.stage, Stage::Frontend(stage)
+            && matches!(self.stack.top(), Stage::Frontend(stage)
                 // `--measure-race-load` times the race path, not the boot
                 // sequence, and skips straight past it.
                 if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some() || self.benchmark.cli.is_some())
@@ -131,7 +131,7 @@ impl Session {
             // `oag_ui::frontend::team`'s and `::options2048`'s own module
             // docs for what each of these carries and why the rest (skin,
             // motion sensor) is drawn and not read here.
-            if let Stage::Frontend(stage) = &self.stage {
+            if let Stage::Frontend(stage) = self.stack.top() {
                 if let Some((team, variant)) = stage.frontend.team_choice() {
                     self.settings.race.pick_team(team);
                     self.settings.race.variant = variant.to_string();
@@ -164,7 +164,7 @@ impl Session {
             // title: its `Launch 2048` carries a request where every other
             // title's `Launch Game` opens the menus and stops. See
             // `oag_ui::frontend::Launch`.
-            let (launch, card) = match &self.stage {
+            let (launch, card) = match self.stack.top() {
                 Stage::Frontend(stage) => (
                     stage.frontend.launch().cloned(),
                     stage.frontend.launched_card(),
@@ -299,7 +299,7 @@ impl Session {
         // long after the boot, and starting a conversion from *there* would put
         // ten minutes of `ffmpeg` behind a two-second screen. `--prefetch` is
         // the boot's, and the boot's screen is the one that waits for it.
-        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready() && stage.race.is_none())
+        if matches!(self.stack.top(), Stage::Loading(stage) if stage.media_ready() && stage.race.is_none())
         {
             self.start_prefetch();
         }
@@ -387,7 +387,7 @@ impl Session {
             let seat_pointers = self.seat_pointers();
             // HD's list rows are taller to the finger, and back to the
             // authored size once a pad, key or mouse speaks.
-            if let Stage::Menu(stage) = &mut self.stage
+            if let Stage::Menu(stage) = self.stack.top_mut()
                 && self.pointer.layout_may_change(&pointer)
             {
                 stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
@@ -428,7 +428,7 @@ impl Session {
             // A recording being watched owns the devices and the race, and nothing the loop does
             // for a race that is driven applies to it: not the pause, not the end screens, not
             // a record or a ghost.
-            if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+            if self.viewer.is_some() && matches!(self.stack.top(), Stage::Race(_)) {
                 // Photo mode over the viewer owns the devices, as it does over a race; the
                 // viewer carries on from where it leaves the playhead.
                 if self.photo.is_some() {
@@ -451,10 +451,10 @@ impl Session {
             }
             // SELECT on `Race End Photo` opens photo mode, once that screen takes input; on
             // any other race tick it is the camera cycle.
-            let at_the_finish = matches!(&self.stage, Stage::Race(stage)
+            let at_the_finish = matches!(self.stack.top(), Stage::Race(stage)
                 if stage.endrace.as_ref().is_some_and(
                     crate::app::race_stage::endrace_touch::EndRace::is_photo));
-            if matches!(self.stage, Stage::Race(_))
+            if matches!(self.stack.top(), Stage::Race(_))
                 && self.photo.is_none()
                 && !self.in_demo()
                 && !self.on_benchmark()
@@ -463,7 +463,7 @@ impl Session {
                 self.controls.buttons_mut().consume_press(Button::Select);
                 if !at_the_finish {
                     self.cycle_camera_view();
-                } else if matches!(&self.stage, Stage::Race(stage)
+                } else if matches!(self.stack.top(), Stage::Race(stage)
                     if stage.endrace.as_ref().is_some_and(
                         crate::app::race_stage::endrace_touch::EndRace::photo_takes_select))
                 {
@@ -487,7 +487,7 @@ impl Session {
             if self.photo.is_none()
                 && !self.in_demo()
                 && !self.in_benchmark()
-                && matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
+                && matches!(self.stack.top(), Stage::Race(stage) if !stage.race.core.sim.finished())
             {
                 let paused = matches!(self.pause, crate::pause::State::Paused { .. });
                 let click = pointer.clicked && paused;
@@ -498,7 +498,7 @@ impl Session {
                     | if paused { seat_clicks } else { 0 };
                 // The title's own pause screen takes START (the original's pause is a menu).
                 if presses != 0
-                    && let Stage::Race(stage) = &self.stage
+                    && let Stage::Race(stage) = self.stack.top()
                     && !paused
                     && self.pause_screen_applies(stage)
                 {
@@ -517,7 +517,7 @@ impl Session {
             // the results-table block below: hand the window back to the
             // menus, exactly as `escape` does from any race.
             // Only the player who paused leaves, as for Start above.
-            if matches!(self.stage, Stage::Race(_))
+            if matches!(self.stack.top(), Stage::Race(_))
                 && self.photo.is_none()
                 && self.paused()
                 && crate::pause::leaves(self.pause, self.controls.take_presses(roles.back))
@@ -540,7 +540,7 @@ impl Session {
             // crossed the line cannot dismiss the board they have not read yet.
             if self.photo.is_none()
                 && !self.on_benchmark_screen()
-                && matches!(&self.stage, Stage::Race(stage)
+                && matches!(self.stack.top(), Stage::Race(stage)
                 if crate::app::race_stage::endrace::results_table_takes_confirm(
                     stage.race.core.sim.finished(),
                     stage.endrace.is_some(),
@@ -567,7 +567,7 @@ impl Session {
             self.poll_online();
             // A benchmark that ended on the tick cap stands still under its stats screen.
             let benchmark_screen = self.on_benchmark_screen();
-            match &mut self.stage {
+            match self.stack.top_mut() {
                 // Photo mode: the race does not tick, whatever state it is in (running, or
                 // finished with the end screens behind). The audio is not simulation state, so
                 // it is stepped as under the pause, which is what lets the engine note spin down
@@ -715,7 +715,8 @@ impl Session {
                     self.sync_lan();
                     self.sync_online();
                     self.sync_ffmpeg(&pointer);
-                    let Stage::Menu(stage) = &mut self.stage else {
+                    let paused = self.stack.paused_race().is_some();
+                    let Stage::Menu(stage) = self.stack.top_mut() else {
                         continue;
                     };
                     // A selection screen takes the tick whole, the way a
@@ -735,7 +736,7 @@ impl Session {
                     );
                     if stage.picker.is_some() {
                         self.tick_picker(&grid);
-                        if !matches!(self.stage, Stage::Menu(_)) {
+                        if !matches!(self.stack.top(), Stage::Menu(_)) {
                             // The craft's drag is Ship Select's alone: the race a confirm
                             // starts clicks on the press again.
                             self.pointer.set_mouse_pans(false);
@@ -757,7 +758,7 @@ impl Session {
                     // The seat assignment screen, after the layout screen: same shape.
                     if stage.assign.is_some() {
                         self.tick_seat_assign(&grid);
-                        if !matches!(self.stage, Stage::Menu(_)) {
+                        if !matches!(self.stack.top(), Stage::Menu(_)) {
                             break;
                         }
                         continue;
@@ -765,7 +766,7 @@ impl Session {
                     // The window layout screen, after the join screen: same shape.
                     if stage.layout.is_some() {
                         self.tick_window_layout(&grid);
-                        if !matches!(self.stage, Stage::Menu(_)) {
+                        if !matches!(self.stack.top(), Stage::Menu(_)) {
                             break;
                         }
                         continue;
@@ -778,7 +779,7 @@ impl Session {
                         } else {
                             self.tick_lan(&grid);
                         }
-                        if !matches!(self.stage, Stage::Menu(_)) {
+                        if !matches!(self.stack.top(), Stage::Menu(_)) {
                             break;
                         }
                         continue;
@@ -787,7 +788,7 @@ impl Session {
                     // the window to the race box's screens, and possibly a load.
                     if stage.join.is_some() {
                         self.tick_join(&grid);
-                        if !matches!(self.stage, Stage::Menu(_)) {
+                        if !matches!(self.stack.top(), Stage::Menu(_)) {
                             break;
                         }
                         continue;
@@ -806,10 +807,10 @@ impl Session {
                         None,
                         &stage.frame,
                         // The same fact `Session::draw`'s own call reads off
-                        // `suspended_race` - a page change mid-pause has to
+                        // the stack - a page change mid-pause has to
                         // drop this snapshot's own full-screen chrome too, or
                         // the outgoing half of the tween flashes it back on.
-                        self.suspended_race.is_some(),
+                        paused,
                     );
                     // The page being left is the disc's own screen where it is one of tiles:
                     // the other titles' pause lists have always faded as the front end's.
@@ -898,13 +899,13 @@ impl Session {
                     // `Stage::Loading` synchronously - the race proper waits
                     // behind that screen's fade - but `Session::resume_race`
                     // (on `MenuEvent::Closed` over a parked race, see
-                    // `Session::suspended_race`) swaps `Stage::Menu` straight
+                    // `ActivityStack::paused_race`) swaps `Stage::Menu` straight
                     // for `Stage::Race`, and without this the frame's
                     // remaining catch-up steps would tick it with whatever
                     // closed the menu still held - Circle, say, read as the
                     // in-race absorb it also means. Bounded by the catch-up
                     // cap, so usually zero or one step, which is easy to miss.
-                    if matches!(self.stage, Stage::Race(_)) {
+                    if matches!(self.stack.top(), Stage::Race(_)) {
                         break;
                     }
                 }
@@ -1137,7 +1138,7 @@ impl Session {
             // may never reach this one at all - see `crate::records`'s own
             // module doc for why both exist.
             //
-            // Outside the `match` above on purpose: that borrows `self.stage`
+            // Outside the `match` above on purpose: that borrows `self.stack`
             // mutably through `stage`, and `self.records` is a different
             // field of the same `self` - ending the first borrow before this
             // runs is what lets the second start. See `Session::escape`,
@@ -1149,14 +1150,14 @@ impl Session {
             // inputs are predictions corrected by a server, under the server's
             // settings, not this player's run.
             let unofficial = self.race_is_unofficial();
-            if let Stage::Race(stage) = &mut self.stage
+            if let Stage::Race(stage) = self.stack.top_mut()
                 && self.net.is_none()
                 && !unofficial
             {
                 crate::app::race_stage::ghost::save(&mut stage.race, &stage.result_key);
             }
             let campaign_title = self.campaign_title();
-            if let Stage::Race(stage) = &mut self.stage
+            if let Stage::Race(stage) = self.stack.top_mut()
                 && stage.race.core.sim.finished()
                 && !stage.result_saved
                 // A split screen's result is nobody's record: the results are
@@ -1305,7 +1306,7 @@ impl Session {
         // The further windows of a `--windows` run, once window 1's frame is submitted: each
         // seat is its own submission. A no-op with one window.
         self.draw_screens();
-        let tick = match &self.stage {
+        let tick = match self.stack.top() {
             Stage::Race(stage) => stage.race.core.sim.world.tick,
             _ => 0,
         };

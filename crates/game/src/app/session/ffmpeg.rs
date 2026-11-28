@@ -75,7 +75,7 @@ impl Session {
         if self.ffmpeg.asked || !self.interactive_launch || self.demo.cli == Some(true) {
             return;
         }
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         if stage.prompt.is_some() || self.shell.is_none() {
@@ -107,7 +107,7 @@ impl Session {
             return;
         };
         let labels = prompt_labels(pin.megabytes(), |id, english| self.say(id, english));
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(Prompt::asking(Purpose::FetchFfmpeg, Confirm::new(labels)));
         }
     }

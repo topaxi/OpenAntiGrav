@@ -119,7 +119,7 @@ impl Session {
                 )
             }
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(prompt);
         }
     }
@@ -144,7 +144,7 @@ impl Session {
         if let Err(e) = self.save_settings() {
             warn!("cannot remember the player name: {e:#}");
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             if let Some(legend) = &mut stage.nav_legend {
                 legend.set_tag(&self.settings.player.tag);
             }

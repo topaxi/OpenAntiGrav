@@ -176,10 +176,11 @@ state after the fact:
    for nothing new to say.
 
 **`result_saved` means "since this stage last became live", not "ever".** An
-*unfinished* race `escape` leaves is parked rather than discarded
-(`Session::suspended_race`), keeping the same `RaceStage` - flag included -
-across the trip through the menus, and `Session::resume_race` swaps it
-straight back into `Stage::Race`. Left set, a Speed Lap lap improved after
+*unfinished* race `escape` leaves is paused under the menus on the activity
+stack rather than discarded (`Session::stack`, ADR-0099), keeping the same
+`RaceStage` - flag included - across the trip through the menus, and
+`Session::resume_race` pops back to it. A finished race popped back to (under a
+replay watch) keeps the flag set: its result was saved when it finished. Left set, a Speed Lap lap improved after
 resuming would never be recorded, and a Time Trial escaped mid-race and then
 resumed to a real finish would have that finish silently swallowed by the
 finish arm's own guard. `resume_race` clears the flag back to `false` on the

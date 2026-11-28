@@ -135,7 +135,7 @@ impl Session {
     /// One frame's CPU time (without the swapchain waits) into the governor, and one log line
     /// for each change of level.
     pub(super) fn feed_governor(&mut self, cpu_seconds: f32) {
-        let Stage::Race(race) = &self.stage else {
+        let Stage::Race(race) = self.stack.top() else {
             self.governor.reset();
             return;
         };

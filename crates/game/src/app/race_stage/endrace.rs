@@ -332,6 +332,12 @@ impl EndRaceRuntime {
         self.flow.which() == Which::Photo
     }
 
+    /// Whether `EndRace Menu` is the screen up.
+    #[must_use]
+    pub(crate) fn on_menu(&self) -> bool {
+        self.flow.which() == Which::Menu
+    }
+
     /// Whether a confirm press may leave the screen on top - see
     /// [`Flow::takes_confirm`].
     #[must_use]
@@ -729,9 +735,6 @@ pub(crate) struct WatchReplayOffer {
     pub(crate) recorded: bool,
     /// The run is held to the disc's own screens (`--original-menu`).
     pub(crate) original_menu: bool,
-    /// A Tournament leg is still to race: watching replaces the finished race, and NEXT RACE
-    /// with it.
-    pub(crate) tournament_next_leg: bool,
     /// A network link is up: the loader would join the room with the recording's race.
     pub(crate) networked: bool,
 }
@@ -743,7 +746,6 @@ impl WatchReplayOffer {
         use oag_title::EndRaceDialect::{Field, Pulse};
         self.recorded
             && !self.original_menu
-            && !self.tournament_next_leg
             && !self.networked
             && matches!(dialect, Some(Pulse | Field))
     }

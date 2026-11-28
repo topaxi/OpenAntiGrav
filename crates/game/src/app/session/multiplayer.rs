@@ -40,7 +40,7 @@ impl Session {
         if lobby.count() < 2 {
             return;
         }
-        if !matches!(self.stage, Stage::Menu(_)) {
+        if !matches!(self.stack.top(), Stage::Menu(_)) {
             return;
         }
         self.remember_devices(&lobby);
@@ -57,7 +57,7 @@ impl Session {
     /// The RACE page as the flow's settings step: pushed over the MULTIPLAYER page, so BACK
     /// from it lands there, with the mode row marked for the people seated.
     fn open_multiplayer_settings(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         if !stage.menu.push("race") {
@@ -135,7 +135,7 @@ impl Session {
                 reason.replace("%d", &most.to_string())
             })
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage
                 .menu
                 .supply(oag_ui::menu::ValueSource::RaceModes, &modes);
@@ -149,7 +149,7 @@ impl Session {
         if !self.multiplayer {
             return;
         }
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         if has_left_the_flow(
@@ -171,7 +171,7 @@ impl Session {
     /// last seated, if they are still there; fewer than two ends it as a plain menu.
     pub(crate) fn reenter_multiplayer(&mut self) {
         let connected = self.controls.connected_pads();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(lobby) = reenter(&mut stage.menu, &self.mp_devices, &connected) else {

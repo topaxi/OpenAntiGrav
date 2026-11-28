@@ -92,7 +92,7 @@ pub(crate) struct RaceStage {
     /// arm's every-tick check ever seeing it happen again.
     ///
     /// **Clearing it on resume is not optional.** A race `escape` parks
-    /// (`Session::suspended_race`, an unfinished race only) keeps this same
+    /// (`ActivityStack::paused_race`, an unfinished race only) keeps this same
     /// `RaceStage`, flag included, across the trip through the menus. Left
     /// set, a Speed Lap improved after resuming would never be recorded -
     /// `escape`'s own guard would see it as already saved - and a Time

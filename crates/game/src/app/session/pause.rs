@@ -39,7 +39,9 @@ impl super::Session {
     /// stand-in for the art).
     pub(crate) fn pause_line(&self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
         use oag_ui::frontend::{Align, Draw};
-        if !matches!(self.stage, Stage::Race(_)) || !several_people(self.controls.assignment()) {
+        if !matches!(self.stack.top(), Stage::Race(_))
+            || !several_people(self.controls.assignment())
+        {
             return Vec::new();
         }
         let table = Table {
@@ -98,7 +100,7 @@ impl super::Session {
     /// the pre-race camera) happens at once: that countdown is on screen, and a
     /// second one would draw over it.
     pub(crate) fn step_pause(&mut self, presses: u8) {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         // Start does not pause a network race, for the reason `window_away` gives.
@@ -132,7 +134,7 @@ impl super::Session {
             }
             _ => None,
         };
-        if let (Some(cue), Stage::Race(stage)) = (cue, &mut self.stage) {
+        if let (Some(cue), Stage::Race(stage)) = (cue, self.stack.top_mut()) {
             stage.race.core.raise_start_cue(cue);
         }
     }

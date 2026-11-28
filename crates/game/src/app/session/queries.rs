@@ -198,7 +198,7 @@ impl Session {
         let strings = strings::project_table(self.settings.language.as_deref());
         let (titles, custom) = (&self.titles, &self.custom_tracks);
         let mod_settings = &mut self.settings.mod_settings;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             title_lists::settle_queries(&mut stage.menu, mod_settings, changed, |query, args| {
                 query_lists(titles, custom, &strings, query, args)
             });

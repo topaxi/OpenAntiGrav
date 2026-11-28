@@ -49,7 +49,7 @@ impl Session {
             }
         }
         self.controls.forget_lobby_keys();
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.join = Some(join);
         }
         self.sync_join_names();
@@ -61,7 +61,7 @@ impl Session {
         let connected = self.controls.connected_pads();
         let told_apart = self.controls.keyboards_told_apart();
         let roles = self.roles();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.join.as_mut() else {
@@ -104,7 +104,7 @@ impl Session {
         }
         self.sync_join_names();
         for outcome in outcomes {
-            if !matches!(self.stage, Stage::Menu(ref stage) if stage.join.is_some()) {
+            if !matches!(self.stack.top(), Stage::Menu(stage) if stage.join.is_some()) {
                 break;
             }
             self.handle_join(outcome);
@@ -113,7 +113,7 @@ impl Session {
 
     /// Tells the screen who sits where, by the names their devices go by.
     fn sync_join_names(&mut self) {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         let Some(open) = stage.join.as_ref() else {
@@ -125,7 +125,7 @@ impl Session {
             .iter()
             .map(|seat| self.seat_name(*seat))
             .collect();
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(open) = stage.join.as_mut()
         {
             open.screen_mut().set_seats(names);
@@ -134,7 +134,7 @@ impl Session {
 
     /// What the screen calls a seat's device.
     fn seat_name(&self, seat: Device) -> String {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return String::new();
         };
         let Some(open) = stage.join.as_ref() else {
@@ -178,7 +178,7 @@ impl Session {
             }
             Outcome::Full => self.play_navs(Some(Nav::Decline)),
             Outcome::Back => {
-                if let Stage::Menu(stage) = &mut self.stage {
+                if let Stage::Menu(stage) = self.stack.top_mut() {
                     stage.join = None;
                 }
                 self.pane_people.clear();
@@ -186,7 +186,7 @@ impl Session {
                 self.play_navs(Some(Nav::Decline));
             }
             Outcome::Start => {
-                let Stage::Menu(stage) = &mut self.stage else {
+                let Stage::Menu(stage) = self.stack.top_mut() else {
                     return;
                 };
                 // A race of one is not multiplayer: START waits for a second person.
@@ -222,7 +222,7 @@ impl Session {
     /// its seat if it has one and leaves the screen if it has none.
     pub(crate) fn escape_join(&mut self) {
         let roles = self.roles();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.join.as_mut() else {
@@ -250,7 +250,7 @@ impl Session {
     /// drives it. Not while a race is parked behind the pause menu - resuming
     /// it needs the seats it left.
     pub(crate) fn unseat_after_split_race(&mut self) {
-        if self.controls.assignment().humans().is_some() && self.suspended_race.is_none() {
+        if self.controls.assignment().humans().is_some() && self.stack.paused_race().is_none() {
             self.controls.merge_devices();
         }
     }

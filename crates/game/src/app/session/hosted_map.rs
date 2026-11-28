@@ -1,7 +1,7 @@
 //! The 2048 campaign map, opened from a title's own menus.
 //!
 //! Omega's `Campaign Selection` offers 2048 beside HD and Fury; choosing it
-//! parks the menus and shows the same `oag_ui::frontend::Frontend` map Vita
+//! pushes over the menus and shows the same `oag_ui::frontend::Frontend` map Vita
 //! 2048 boots into, built from Omega's own data (`crate::boot::map_seed`).
 //! Back returns to the chooser with 2048 still selected, and an event
 //! launched from the map starts its race through [`Session::follow_launch`],
@@ -19,8 +19,11 @@ use super::Session;
 use super::menus::combine_variant;
 
 impl Session {
-    /// Parks the menus and shows the campaign map.
+    /// Shows the campaign map over the menus.
     pub(crate) fn open_hosted_map(&mut self) {
+        if !matches!(self.stack.top(), Stage::Menu(_)) {
+            return;
+        }
         let Some(shell) = self.shell.clone() else {
             return;
         };
@@ -65,25 +68,22 @@ impl Session {
             shell.title_font.clone(),
             shell.buttons_font.clone(),
         );
-        let Stage::Menu(menu) = std::mem::replace(
-            &mut self.stage,
-            Stage::Frontend(Box::new(FrontendStage::hosted(renderer, frontend))),
-        ) else {
-            return;
-        };
         debug!("{}: opening the campaign map", shell.title.name);
-        self.parked_menu = Some(menu);
+        self.stack.push(
+            Stage::Frontend(Box::new(FrontendStage::hosted(renderer, frontend))),
+            None,
+        );
     }
 
     /// Hands the window back to the menus when the map was backed out of or
     /// launched an event; a no-op while no map is open.
     pub(crate) fn poll_hosted_map(&mut self) {
-        if self.parked_menu.is_none() {
-            return;
-        }
-        let Stage::Frontend(stage) = &self.stage else {
+        let Stage::Frontend(stage) = self.stack.top() else {
             return;
         };
+        if !matches!(self.stack.below(1), Some(Stage::Menu(_))) {
+            return;
+        }
         let mut card = None;
         let launch = if stage.frontend.is_finished() {
             card = stage.frontend.launched_card();
@@ -93,9 +93,7 @@ impl Session {
         } else {
             return;
         };
-        if let Some(menu) = self.parked_menu.take() {
-            self.stage = Stage::Menu(menu);
-        }
+        self.pop_activity();
         if let Some(launch) = launch {
             self.follow_launch(launch, card);
         }

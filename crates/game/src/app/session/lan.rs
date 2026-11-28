@@ -111,7 +111,7 @@ impl Session {
 
     /// HOST GAME: the RACE page, pushed over the LAN page so BACK returns there.
     pub(crate) fn open_lan_host(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         if !stage.menu.push("race") {
@@ -152,7 +152,7 @@ impl Session {
         if !self.lan_hosting_settings() && !picking {
             return;
         }
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         if (picking || stage.menu.page().id != "race")
@@ -326,7 +326,7 @@ impl Session {
     }
 
     fn show_lan_screen(&mut self, screen: Join) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = Some(screen);
         }
     }
@@ -335,7 +335,7 @@ impl Session {
     pub(crate) fn end_lan(&mut self) {
         self.lan = None;
         self.net = None;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         self.resupply_race_modes();
@@ -350,7 +350,7 @@ impl Session {
             .iter()
             .fold(0, |all, press| all | press.buttons);
         let back = self.roles().back;
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let skin = &stage.skin;
@@ -380,7 +380,7 @@ impl Session {
         }
         events.extend(screen.pointer(pointer, skin));
         for event in events {
-            if !matches!(&self.stage, Stage::Menu(stage) if stage.lan.is_some()) {
+            if !matches!(self.stack.top(), Stage::Menu(stage) if stage.lan.is_some()) {
                 break;
             }
             self.handle_lan(event);
@@ -413,7 +413,7 @@ impl Session {
                     hosted.start();
                     let starting = self.lan_say("OAG_LAN_STARTING", "STARTING...");
                     self.play_navs(Some(Nav::Accept));
-                    if let Stage::Menu(stage) = &mut self.stage
+                    if let Stage::Menu(stage) = self.stack.top_mut()
                         && let Some(screen) = stage.lan.as_mut()
                     {
                         screen.set_hint(starting);
@@ -444,7 +444,7 @@ impl Session {
                 "THE HOST COMPUTER'S ADDRESS, e.g. 192.168.1.20",
             ),
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(Prompt::typing(
                 Purpose::LanAddress,
                 prompt::Keyboard::with_keys(labels, "", 45, prompt::ADDRESS_KEYS),
@@ -478,7 +478,7 @@ impl Session {
                     "{} {text}",
                     self.lan_say("OAG_LAN_FAILED", "COULD NOT JOIN")
                 );
-                if let Stage::Menu(stage) = &mut self.stage
+                if let Stage::Menu(stage) = self.stack.top_mut()
                     && let Some(screen) = stage.lan.as_mut()
                 {
                     screen.set_hint(hint);
@@ -511,7 +511,7 @@ impl Session {
                 .as_ref()
                 .and_then(|shell| crate::lan_list::reason(state, &shell.strings))
                 .unwrap_or_default();
-            if let Stage::Menu(stage) = &mut self.stage
+            if let Stage::Menu(stage) = self.stack.top_mut()
                 && let Some(screen) = stage.lan.as_mut()
             {
                 screen.set_hint(hint);
@@ -696,7 +696,7 @@ impl Session {
             }
         };
         self.lan = Some(Lan { step });
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(screen) = stage.lan.as_mut()
         {
             match rows {
@@ -733,7 +733,7 @@ impl Session {
     /// The welcome has come: this machine's `self.net` is the race, and the launch is the
     /// ordinary one with the server's options (`Session::launch_race`).
     fn launch_lan_race(&mut self) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         if let Err(e) = self.launch_race() {

@@ -66,7 +66,7 @@ impl Session {
     /// Whether the reads of the screens that could open next have landed.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn opening_reads_landed(&self) -> bool {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return false;
         };
         let open = stage.picker.as_ref().map(|picker| picker.model.kind());
@@ -82,7 +82,7 @@ impl Session {
     /// Starts the read of whichever screen's opening changed. Off a menu, drops what it holds:
     /// a race can change the records the livery row reads.
     pub(crate) fn refresh_opening_reads(&mut self) {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             self.opening_reads = OpeningReads::default();
             return;
         };

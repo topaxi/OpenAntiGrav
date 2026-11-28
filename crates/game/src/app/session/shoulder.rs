@@ -19,7 +19,7 @@ pub(super) fn l1_reads_as_flip(
 impl super::Session {
     /// [`l1_reads_as_flip`] for the stage on screen.
     pub(super) fn l1_is_flip(&self) -> bool {
-        let (live_race, armed) = match &self.stage {
+        let (live_race, armed) = match self.stack.top() {
             Stage::Race(stage) => (
                 !stage.race.core.sim.finished(),
                 stage.race.core.sim.l1_is_flip(),

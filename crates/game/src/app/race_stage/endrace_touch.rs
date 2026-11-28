@@ -270,6 +270,14 @@ impl EndRace {
         }
     }
 
+    /// `EndRace Menu`, while it is the screen up - never, on the touch pages.
+    pub(crate) fn menu_on_screen(&self) -> Option<&oag_ui_screens::endrace::EndRaceMenu> {
+        match self {
+            Self::Disc(runtime) if runtime.on_menu() => Some(runtime.menu()),
+            _ => None,
+        }
+    }
+
     /// Whether `Race End Photo` is up - never, on the touch pages.
     pub(crate) fn is_photo(&self) -> bool {
         matches!(self, Self::Disc(runtime) if runtime.is_photo())

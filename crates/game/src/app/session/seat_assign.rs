@@ -47,7 +47,7 @@ impl Session {
             })
             .collect();
         if !crate::split_screen::has_panes_to_choose(windows.iter().map(|window| window.seats))
-            || !matches!(self.stage, Stage::Menu(_))
+            || !matches!(self.stack.top(), Stage::Menu(_))
         {
             return Some(layout);
         }
@@ -62,7 +62,7 @@ impl Session {
         self.pane_people = screen.pane_people();
         #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         self.refresh_window_titles();
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.assign = Some(SeatAssignStage::new(layout, screen));
         }
         None
@@ -89,7 +89,7 @@ impl Session {
     pub(crate) fn tick_seat_assign(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let presses = self.controls.device_presses().to_vec();
         let roles = self.roles();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.assign.as_mut() else {
@@ -114,7 +114,7 @@ impl Session {
             &crate::split_screen::seat_cells,
         ));
         for event in events {
-            if !matches!(self.stage, Stage::Menu(ref stage) if stage.assign.is_some()) {
+            if !matches!(self.stack.top(), Stage::Menu(stage) if stage.assign.is_some()) {
                 break;
             }
             self.handle_seat_assign(event);
@@ -128,7 +128,7 @@ impl Session {
             Event::Moved | Event::Changed => self.play_navs(Some(Nav::Moved(None))),
             Event::Refused => self.play_navs(Some(Nav::Decline)),
             Event::Back => {
-                if let Stage::Menu(stage) = &mut self.stage
+                if let Stage::Menu(stage) = self.stack.top_mut()
                     && let Some(open) = stage.assign.take()
                 {
                     stage.layout = Some(open.into_layout());
@@ -142,7 +142,7 @@ impl Session {
     /// START: the assignment is kept for the race and remembered, and the flow goes on
     /// ([`Session::continue_multiplayer`]) with the lobby the join screen made.
     fn finish_seat_assign(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.assign.take() else {
