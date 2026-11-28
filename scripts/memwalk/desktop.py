@@ -17,8 +17,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 
-import points
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import points  # noqa: E402
 
 sys.path.insert(0, str(points.HERE.parent))
 import oag_tmp  # noqa: E402

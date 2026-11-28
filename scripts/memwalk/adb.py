@@ -18,8 +18,10 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
-import points
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import points  # noqa: E402
 
 PKG = "org.openantigrav.game"
 FILES = f"/sdcard/Android/data/{PKG}/files"
