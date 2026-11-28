@@ -654,10 +654,10 @@ fn launch(mut cli: Cli) -> Result<Launch> {
         let net = cli
             .net
             .connect(&source)?
-            .map(|connect| crate::net_play::NetPlay::connect(&connect))
+            .map(|connect| crate::net_play::NetPlay::connect(&connect).map(Box::new))
             .transpose()?;
         #[cfg(target_arch = "wasm32")]
-        let net: Option<crate::net_play::NetPlay> = {
+        let net: Option<Box<crate::net_play::NetPlay>> = {
             // Refuses `--connect` by name; the browser build never joins a server.
             cli.net.connect(&source)?;
             None

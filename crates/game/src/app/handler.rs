@@ -74,7 +74,7 @@ pub(crate) struct App {
     pub(crate) dev: crate::devrun::Dev,
     /// `--connect`: the race is a server's. Joined once the race is built, then
     /// handed to the session. See `crate::net_play`.
-    pub(crate) net: Option<crate::net_play::NetPlay>,
+    pub(crate) net: Option<Box<crate::net_play::NetPlay>>,
     /// `--net-bot`: fly this machine's craft with the player's own driver in a network race,
     /// `--connect` or a LAN one from the menus.
     pub(crate) net_bot: bool,
@@ -592,7 +592,7 @@ impl App {
             original_menu: self.original_menu,
             dev: std::mem::take(&mut self.dev),
             dev_clock: crate::app::session::devrun::Clock::default(),
-            net: self.net.take().map(Box::new),
+            net: self.net.take(),
             net_bot: self.net_bot,
             net_over_ticks: 0,
             prompt: crate::prompts::PromptState {

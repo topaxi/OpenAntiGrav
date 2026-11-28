@@ -640,7 +640,7 @@ fn pose_flaps(cli: &Cli) -> Result<Option<crate::race_capture::pose_flaps::PoseF
 /// How a `--race` run was reached beyond its options: a server's race, or a shot to remake.
 #[derive(Default)]
 pub(crate) struct RaceRoute {
-    pub(crate) net: Option<crate::net_play::NetPlay>,
+    pub(crate) net: Option<Box<crate::net_play::NetPlay>>,
     pub(crate) restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
     /// With `restage`: the motion blur the shot was averaged from.
     pub(crate) blurred: Option<crate::shot_meta::Blurred>,
@@ -879,7 +879,7 @@ pub(crate) fn race_launch(
                     cli.wreck.force_quake.as_deref(),
                     "Quake",
                 )?,
-                net: net.map(std::rc::Rc::new),
+                net: net.map(std::rc::Rc::from),
                 net_overlay: cli.overlay
                     || settings.graphics.perf_overlay == oag_present::perf::Overlay::Dev,
                 remote_correction: crate::app::args::remote_correction(

@@ -250,8 +250,12 @@ Same `dist` build, KiB:
 | `app::launch` | 256.0 | 529.1 | 229.1 |
 | `headless::race_launch` | 308.2 | 540.2 | 296.2 |
 
-No gate recipe builds the Android library, so `check-android-stack.py` itself only
-runs from `scripts/build-apk.sh`.
+`App::net` was also held by value (33,760 bytes, mostly the client's confirmed
+`World`); it is boxed from `NetPlay::connect` on, as `Session::net` already was. That
+took `open_with` to 96.1, `launch` to 115.2 and `race_launch` to 228.2 KiB.
+
+No gate recipe builds the Android library: the gate runs only the script's
+`--selftest`, and the frames of a real library are read by `scripts/build-apk.sh`.
 
 **On the S21** (Galaxy S21, Android 14, the `dist` APK of this change, media volume 0,
 `--no-audio`, `--autopilot`, `--frame-log`, default settings): the launch-file
