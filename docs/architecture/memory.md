@@ -123,6 +123,218 @@ constructor blocks `SIGUSR1`/`SIGUSR2` and starts a thread in `sigwait`; on
 `mallinfo2()` to a file, on `SIGUSR2` it calls `malloc_trim(0)` first (a handler
 doing the same can deadlock inside a `malloc`). Send `SIGUSR1` from the poller.
 
+## A finished race held under its replay (ADR-0099 step 5)
+
+**The "before" numbers.** [ADR-0099](adr/0099-a-run-context-and-an-activity-stack-own-navigation.md)
+step 4 keeps a finished race resident under its replay viewer. These are the
+figures on `main` at `03002a408`, where WATCH REPLAY still drops the finished race
+(live heap at (c) matches (b): 977 against 959 MiB on HD; the phone's native heap
+1007 against 989). All figures are MiB.
+
+Points, all from one process walking one Time Trial flown by `--autopilot`:
+
+- **pre**: the RACE page, before the first race.
+- **a**: in the race, sim ticks 3000 to 3600.
+- **b**: the finished race's end menu, the 700 sim ticks the walk holds it.
+- **c**: the replay viewer after WATCH REPLAY from that menu, ticks 3000 to 3600.
+- **d**: the main menu after leaving the viewer. **d trim**: the same after `malloc_trim(0)`.
+
+Three runs per cell, each value the median over the window's samples, then over the
+runs. Live heap agrees within 10 MiB between runs; (a) and (b) agree within 30 unless
+a range or a note says otherwise; resident figures at pre, (c) and (d) move by up to
+70. Titles: Pulse PSP
+(`pulse-psp-eu.chd`) and HD/Fury (`hdfury-ps3-eu-dec.iso`, the decrypted image;
+the table in the section above used `.iso`).
+
+**Setup differences that matter.** The walk is headless (`--drive`) at 1440x816,
+draws only at its screenshots and has no swapchain, so a windowed race holds more.
+`--no-soundtrack` leaves out music decoding. Desktop is `target/debug` on glibc
+(Ryzen 9 7900, Linux 7.3.6, glibc 2.44; load 0 to 20 across runs, memory did not
+move with it). The phone is a Galaxy S21 (SM-G991B, Mali-G78, Android 14,
+7.0 GiB) running the `dist` APK (Scudo), battery 28 to 34 C.
+
+### Desktop
+
+RSS is `VmRSS`. Live heap is `mallinfo2` `uordblks + hblkhd`, one reading per
+window. VRAM and GTT are the process's own `/proc/<pid>/fdinfo` figures; **none of
+them is in `VmRSS`**.
+
+| Pulse PSP | pre | a | b | c | d | d trim |
+| --- | --- | --- | --- | --- | --- | --- |
+| RX 7800 XT: RSS | 178 | 278 | 279 | 332 | 338 | 226 |
+| RX 7800 XT: live heap | 81 | 179 | 182 | 195 | 97 | 97 |
+| RX 7800 XT: VRAM | 78 | 346 | 348 | 383 | 188 | 188 |
+| iGPU (Raphael): RSS | 181 | 281 | 282 | 331 | 339 | 227 |
+| iGPU: live heap | 81 | 182 | 185 | 198 | 100 | 100 |
+| iGPU: VRAM + GTT | 64 + 15 | 201 + 155 | 201 + 156 | 233 + 161 | 33 + 162 | 33 + 162 |
+
+| HD/Fury | pre | a | b | c | d | d trim |
+| --- | --- | --- | --- | --- | --- | --- |
+| RX 7800 XT: RSS | 350 | 1121 | 1122 | 1166 | 1005 | 359 |
+| RX 7800 XT: live heap | 200 | 956 | 959 | 977 | 212 | 212 |
+| RX 7800 XT: VRAM | 230 | 972 | 974 | 982 (to 1060) | 319 (269 to 383) | same |
+| iGPU: RSS | 356 | 1123 | 1124 | 1170 | 1014 | 363 |
+| iGPU: live heap | 200 | 959 | 963 | 980 | 215 | 215 |
+| iGPU: VRAM + GTT | 184 + 47 | 258 + 736 | 258 + 739 | 234 + 771 | 154 + 244 | same |
+
+`VmHWM` for HD is 1268 up to (b) and **1850 by (c)** (the replay's load). Today
+that load starts with the finished race already dropped (VRAM falls from 974 to
+406 within 0.3 s of the loading stage).
+
+**A full field costs a little more than a Time Trial.** Same walk to (a) with
+`race.mode=single_race` (eight craft; two runs, RX 7800 XT): HD live heap 1004
+against 956 and VRAM 1046 against 972; Pulse 183 against 179 and about 350 against
+346. A mid-Tournament leg, the case step 4 serves, is the full field.
+
+### Galaxy S21
+
+`resident + swap` is `VmRSS + VmSwap`, which includes the Mali buffers mapped into
+the process. HD runs into zram, so `VmRSS` alone spreads by 700 MiB between runs
+while the sum holds within 15 up to (b). `GPU` is `dumpsys gpu --gpumem`.
+**`dumpsys meminfo`'s TOTAL PSS and RSS leave the GPU memory out** (its Graphics
+row reads 2 MiB here).
+
+| Pulse PSP | pre | a | b | c | d |
+| --- | --- | --- | --- | --- | --- |
+| resident + swap | 321 | 728 | 728 | 778 | 501 |
+| native heap alloc | 61 | 180 | 183 | 197 | 89 |
+| GPU | 39 | 339 | 339 | 339 | 104 |
+| TOTAL PSS | 168 | 264 | 265 | 313 | 271 |
+| TOTAL RSS (meminfo) | 272 | 368 | 369 | 417 | 375 |
+
+| HD/Fury | pre | a | b | c | d |
+| --- | --- | --- | --- | --- | --- |
+| resident + swap | 690 | 2998 | 2993 | 3249 | 966 |
+| native heap alloc | 188 | 984 | 989 | 1007 | 210 |
+| GPU | 209 | 1869 | 1868 | 2124 | 335 |
+| TOTAL PSS | 377 | 1035 | 1035 | 1057 | 556 |
+| TOTAL RSS (meminfo) | 462 | 910 | 844 (356 to 1093) | 1009 | 529 |
+
+HD fits today: all three walks finished. `VmHWM` reaches 3250 to 3363, and 22, 15
+and 0 cached processes of other apps died during the three HD walks (none during
+Pulse's), which is consistent with memory pressure; the `lmkd` lines were not
+captured. HD's GPU figure is about twice the desktop's because Mali has no BC and
+the disc's blocks are uploaded as RGBA8
+([texture compression](../rendering/texture-compression.md)).
+
+### What holding the race would cost
+
+**An estimate, not a measurement**: (b) minus the floor (d), the race itself being
+what (b) has and (d) does not. It assumes the two race scenes share nothing (the
+texture upload cache is per `Scene::new`).
+
+| | heap | GPU memory | together |
+| --- | --- | --- | --- |
+| Pulse, RX 7800 XT | 85 | 160 (270 against pre) | about 250 to 350 |
+| Pulse, iGPU | 84 | 163 (278 against pre) | about 250 to 360 |
+| Pulse, S21 | 94 | 235 | about 330 |
+| HD, RX 7800 XT | 748 | 655, 591 to 710 (745 against pre) | about 1.3 to 1.5 GiB, half of it VRAM |
+| HD, iGPU | 747 | 596 (766 against pre) | about 1.3 to 1.5 GiB, all system RAM |
+| HD, S21 | 779 | 1533 | about 2.3 GiB |
+
+- **Heap** is live heap on desktop and native heap alloc on the phone. Do not use
+  `VmRSS` (b) minus (d): it reads 113 on HD and -59 on Pulse, because the race
+  dropped on leaving the viewer is not returned to the kernel (the Open bullet
+  below). `VmRSS` (b) minus **d trim** agrees with live heap on HD (762 against
+  748) and not on Pulse (53 against 85, fragmentation).
+- **GPU memory** has two floors because (d) retains more than (pre): the low
+  figure is against (d), the high one against (pre).
+- The phone's `resident + swap` (b) minus (d) is 228 (Pulse) and 2020 (HD), in
+  line with the two columns added.
+
+**The risk is the replay's load, not the steady state.** HD's load peaks 580 above
+a first race load even with the finished race dropped. With the race held, an
+upper estimate is today's peak plus the held race: about 2600 MiB of `VmRSS` on
+desktop (1850 + 750), and about 5300 to 5700 MiB on the S21 (`VmHWM` 3250 to 3363
+plus 2020 to 2312), on a phone with 7200 MiB in total that had 3000 to 3600
+available with the game not running. Pulse is not a concern on any of these. **Steam Deck not
+measured**; the iGPU row is the nearest proxy (shared system RAM). 2048, a desktop
+release build and the VRAM ceiling were not measured.
+
+### Reproducing it
+
+The walk script comes from this generator (`mkwalk.sh pulse > walk.drive`):
+
+```sh
+#!/usr/bin/env bash
+# mkwalk.sh pulse|hd  > walk.drive
+hold() { for _ in $(seq "$1"); do printf 'key; ticks 1000\n'; done; }
+case $1 in
+  pulse) finish="ticks 2800; until endrace=photo within 1500
+ticks 100; press cross; ticks 100; press cross; ticks 100"; end=8000; watch="press down down down" ;;
+  hd) finish="ticks 2800; until endrace=other within 600
+ticks 100; press cross; ticks 100"; end=7700; watch="press down down" ;;
+esac
+cat <<WALK
+boot; select racebox; press cross; until page=race
+set race.mode=time_trial
+$(hold 250)
+select launch_race; press cross; until screen=picker; press cross
+until screen.id=ship-select; press cross; until stage=race within 4000
+ticks 2800; until sim_tick=3000 within 600; screenshot SHOTS/a.png; until sim_tick=3600 within 700
+$finish
+screenshot SHOTS/b.png; until sim_tick=$end within 1500
+$watch; press cross; until replay=playing within 4000
+ticks 2800; until sim_tick=3000 within 600; screenshot SHOTS/c.png; until sim_tick=3600 within 700
+escape; until page=replays within 400; ticks 30; press circle; until page=main within 100
+ticks 60; screenshot SHOTS/d.png
+$(hold 700)
+quit
+WALK
+```
+
+SHA-256 of the output, before `SHOTS` is replaced by a directory:
+`pulse` `c0b69394eb8ac1032f98cf657bafdecc227cc43f24442a4227d064d321be3e05`,
+`hd` `69ddcd222099875b836e63ecd4acea02052c0254ab26a80b47676d72e2e2c030`.
+
+- **Why it is shaped so.** `ticks` runs unthrottled and `until` runs one tick per
+  16.7 ms, so each measured point is held by an `until` on `sim_tick`. A menu has
+  no tick to wait on, and a long `ticks` there starts the attract demo, hence
+  `key; ticks 1000`.
+- **Desktop.** A profile of its own (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
+  `XDG_STATE_HOME`), `OAG_MODS` and `OAG_TRACKS` on empty directories, no
+  `DISPLAY` or `WAYLAND_DISPLAY`, `MESA_VK_DEVICE_SELECT=1002:747e!` (7800 XT) or
+  `1002:164e!` (iGPU):
+
+  ```sh
+  oag-game <image> --no-audio --no-soundtrack --no-intro --seed 7 --autopilot \
+    --drive "$(cat walk.drive)" --state-log state.jsonl
+  ```
+
+- **Phone.** Move `files/config` and `files/data/oag/replays` aside first and put
+  them back after (the walk writes settings, records and a replay). Push the walk,
+  write the [launch file](../tools/android.md), one entry a line, with `F` the
+  app's files directory, then `am force-stop` and `am start`: `<image path>`,
+  `--no-audio`, `--no-soundtrack`, `--no-intro`, `--autopilot`, `--drive-file`,
+  `F/walk.drive`, `--state-log`, `F/walk-state.jsonl`, `OAG_MODS=F/walk-empty`,
+  `OAG_TRACKS=F/walk-empty`. The `dist` build has no `--seed`, so the phone flies
+  a different race (finish at sim tick 6833 against 6786 on Pulse). The headless
+  walk drew no ANR.
+- **Sampling.** Read the state log's last line together with the memory, every
+  20 ms on desktop, back to back over adb on the phone (`/proc/<pid>/status`,
+  `dumpsys meminfo <pid>`, `dumpsys gpu --gpumem`; keep a phone sample only if the
+  window is the same before and after the call). Window rules: **pre** `stage=menu
+  page=race` before the first (a); **a** `stage=race`, no `replay`, no `endrace`,
+  `sim_tick` 3000 to 3600; **b** `stage=race`, `endrace=other`, `sim_tick` within
+  700 below the walk's `end`; **c** `replay=playing`, `sim_tick` 3000 to 3600;
+  **d** `stage=menu page=main` after (c).
+- **Heap.** The `mallinfo2` shim described under "Reproducing it" above:
+  `SIGUSR1` one second into each window, `SIGUSR2` (trim) 2.5 s into (d), with
+  **d trim** read from 3.5 s on.
+
+**After step 4 the walk's tail changes, and this tail has not been run.** EXIT pops
+back to the end menu, so replace the `escape; until page=replays ...` line with:
+
+```text
+escape; until endrace=other within 400
+ticks 100; screenshot SHOTS/e.png; until sim_tick=<end + 700> within 1500
+press up up up; press cross; until page=main within 400
+```
+
+(`up up` on HD). Add a window **e**: `endrace=other`, no `replay`, after (c); it
+should read like (b). Where focus lands after the pop is unknown, so read `e.png`
+and adjust the `up` presses until the cursor is on RETURN TO MENUS.
+
 ## Open
 
 - A race holds about 1.1 GB in play on this build (debug, opt-level 2 for
@@ -136,3 +348,11 @@ doing the same can deadlock inside a `malloc`). Send `SIGUSR1` from the poller.
 - A race that ends by finishing is dropped in place on the frame thread
   (`Session::open_menus`), not through `drop_off_thread`; the next build's trim
   covers its memory.
+- After numbers owed by ADR-0099 step 4: re-run the walks under "A finished race
+  held under its replay" with the race held, desktop and S21, HD first.
+- Step 5's fallback (drop the held GPU scene) leaves HD's roughly 750 MiB of
+  heap; `graphics.texture_compression=astc` on the phone is the other lever for
+  the GPU half. Neither is measured (ASTC needs two races on a circuit, since the
+  first fills the cache).
+- Leaving the replay viewer for the menus drops its race with no trim: HD sits at
+  about 1005 MiB resident there against 359 after `malloc_trim(0)`.
