@@ -7,12 +7,14 @@ how to get there from a copy you legally own.
 ships no game content, no per-game licences and no disc keys, and does not say
 where to get any of them. See [legal](../overview/legal.md).
 
-**Where each route starts.** This project does not document how to run a disc
-or console dumping tool. A route below starts with what your own dump gives you,
-and ends with the file the game accepts.
+**Where each route starts.** This project writes no dumping guide of its own.
+For the dump itself, each route links the guide of an emulator project. Those
+are their instructions, for your own console or discs, and this project has not
+tried them. The rest of a route starts with what your dump gives you and ends
+with the file the game accepts.
 
 **What was tested.** This page collects steps from other pages (2026-11-28).
-None was re-run for it. The linked pages say what was tried.
+None was re-run for it. This project's linked pages say what was tried.
 
 | Title | You end up with | Desktop | Web | Details |
 | --- | --- | --- | --- | --- |
@@ -31,8 +33,10 @@ File names do not matter. The game reads the title's ID from inside the file.
 
 ## Wipeout Pulse and Pure (PSP)
 
-1. Dump your own UMD with your own dump tool. The result is an `.iso`.
-2. Optional: [compress it to `.chd`](#compress-an-iso-to-chd).
+1. Dump your own UMD to an `.iso`: see PPSSPP's
+   [Dumping UMD games](https://www.ppsspp.org/docs/getting-started/dumping-games/).
+2. Optional: [compress it to `.chd`](#compress-an-iso-to-chd). That guide also
+   offers CSO. Do not use CSO here: the game does not open it.
 
 Of disc image endings, these two are the ones the game looks for: see
 [what to put in the folder](../overview/installing.md#3-what-to-put-in-the-folder-per-game).
@@ -46,7 +50,8 @@ Of disc image endings, these two are the ones the game looks for: see
 
 The PS2 release is Europe only.
 
-1. Dump your own disc with your own dump tool. The result is an `.iso`.
+1. Dump your own disc to an `.iso`: see PCSX2's
+   [Dumping Discs](https://pcsx2.net/docs/setup/discs/).
 2. Optional: [compress it to `.chd`](#compress-an-iso-to-chd).
 
 **What the game accepts**
@@ -78,7 +83,9 @@ has HD without Fury.
 
 ### From the PS3 disc
 
-1. Dump your own disc with your own dump tool. The result is an `.iso`.
+1. Dump your own disc to an `.iso`: see the
+   [RPCS3 quickstart](https://rpcs3.net/quickstart). Choose an ISO: a dumped
+   disc folder is not opened.
 2. **Do not decrypt it.** The game reads an encrypted image and decrypts it in
    memory. An image you already decrypted also works.
 3. For an encrypted image, you need the 16-byte key of your own disc, recorded
@@ -105,8 +112,10 @@ and [PS3 disc encryption](../formats/ps3-disc.md).
 ### From the PlayStation Store
 
 This route was checked with the Europe version (`NPEA00057`, v3.00) only. You need the package (`.pkg`)
-of your own purchase and the licence file (`.rap`) that comes with it. The tool
-is RPCS3's own package installer.
+of your own purchase and the licence file (`.rap`) that comes with it. For
+getting both from your own console, see the
+[RPCS3 quickstart](https://rpcs3.net/quickstart). The install tool is RPCS3's
+own package installer.
 
 1. Put the `.pkg` in a new, empty folder. Never run anything from it.
 2. Make a separate RPCS3 profile for this, so your main one is not touched. It
@@ -142,15 +151,28 @@ derived by the console's own hardware: see
 
 ### A `.vpk` from your own console
 
-A NoNpDrm dump of the game installed on your own Vita gives you the folder's
-files in the clear. Zip it as in [Pack a `.vpk`](#pack-a-vpk). This project does
-not document how to use NoNpDrm. The reader was tested with stand-in `.vpk`
-files made from unpacked folders, not with a real NoNpDrm dump.
+1. Dump the game from your own Vita: see
+   [Dumping Games in the Vita3K quickstart](https://vita3k.org/quickstart.html#dumping).
+2. The game needs files that are already decrypted. In that guide, copying the
+   folder with VitaShell's "Open decrypted" does this. Its FAGDec step decrypts
+   program files, which this game never reads.
+3. Zip the folder as in [Pack a `.vpk`](#pack-a-vpk). The name must end in
+   `.vpk`, not `.zip`.
+
+**No console dump has been tried.** The reader was tested with stand-in `.vpk`
+files made from folders unpacked on a computer. [Vita packages](../formats/vita-package.md)
+expects a NoNpDrm copy to hold plain files too, but that is not tested either.
+Testing a real dump would settle both.
 
 ### Decrypt your own `.pkg` on a computer
 
-You need your own package and your own licence for it, as a zRIF string. The
-four steps below are the ones in
+You need your own package and your own licence for it, as a zRIF string.
+
+Vita3K's installer also decrypts a package, given the zRIF. This project has
+checked that route with the 2048 demo only: see
+[Demos](../overview/installing.md#demos).
+
+The four steps below are the ones in
 [Vita PKGs decrypt in four steps](../../data/README.md#vita-pkgs-decrypt-in-four-steps-dataextractedvita-holds-the-result).
 **Only steps 1 and 2 are needed to play.**
 
@@ -225,6 +247,11 @@ jailbroken consoles, whose keys are public. A package from the PlayStation
 Store is tied to a console and is refused with a message that says so. **This
 project does not document how to make a fake package from your own copy**, and
 does not say where to get one.
+
+For dumping a game from your own console, see the
+[shadPS4 quickstart](https://shadps4.net/quickstart/). It produces folders, not
+fake packages. **This project has not tried a console-dumped folder**, so it
+cannot say that one opens.
 
 If you have both files from your own copy in that form:
 
