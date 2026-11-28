@@ -248,32 +248,35 @@ fn pulse_psp_race_page_back_hint_leaves() {
 
 /// Cell Selection's footer carries Help, AI difficulty, Confirm and Back: Help opens Cell Help
 /// on the button the pressing and the choice put it on (with it open a direction moves nothing),
-/// and Back then leaves for Grid Selection.
+/// and Back then leaves for Grid Selection. One launch for both choices: `config` switches the
+/// choice on Grid Selection, and the cursor is put back where it started, since a campaign reopens
+/// where the cursor was left.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]
 fn pulse_ps2_cell_selection_hints_follow_menu_back() {
     let Some(image) = ps2() else { return };
-    let open = "boot; until stage=menu within 3000; select campaign; press cross; \
-                until screen=campaign; press cross; until screen.id=cell; ticks 60";
-    for choice in ["original", "circle"] {
+    let profile = Profile::fresh("ps2-cell");
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle"].into_iter().enumerate() {
         let (back, help) = buttons("triangle", choice);
         println!("Cell Selection, MENU BACK {choice}: {help} opens Cell Help, {back} leaves");
-        // A profile of its own per choice: the campaign reopens where the cursor was left, and
-        // the script reads the cursor against where it starts.
-        let profile = Profile::fresh(&format!("ps2-cell-{choice}"));
-        profile.menu_back(choice);
-        profile.drive(
-            &image,
-            &[],
-            &format!(
-                "{open}; draw; expect hints={help}; expect hints=square; \
-                 click hint {help}; ticks 20; press down; ticks 20; expect focus=grid0_3_1; \
-                 press {help}; ticks 20; press down; ticks 20; expect focus!=grid0_3_1; \
-                 click hint {back}; until screen.id=grid within 100"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{onto}; ticks 60; draw; expect hints={help}; expect hints=square; \
+             click hint {help}; ticks 20; press down; ticks 20; expect focus=grid0_3_1; \
+             press {help}; ticks 20; press down; ticks 20; expect focus!=grid0_3_1; \
+             press up; ticks 20; expect focus=grid0_3_1; \
+             click hint {back}; until screen.id=grid within 100; ",
+            onto = if number == 0 {
+                "boot; until stage=menu within 3000; select campaign; press cross; \
+                 until screen=campaign; press cross; until screen.id=cell"
+                    .to_string()
+            } else {
+                format!("config controls.menu_back={choice}; press cross; until screen.id=cell")
+            }
+        ));
     }
+    profile.drive(&image, &[], &script, "folded.jsonl");
 }
 
 /// The pause menu's root draws `Confirm` alone (Back is silent there): clicking it takes the row
@@ -322,32 +325,34 @@ fn pulse_psp_end_of_race_menu_confirm_hint_confirms() {
 
 /// Photo mode's key legend, on Pulse's PS2: `Back` is the triangle under `original` and the
 /// circle under MENU BACK `circle`, and the camera reset is the button Back displaced. A click on
-/// the reset hint keeps the mode open, a click on the Back hint leaves it.
+/// the reset hint keeps the mode open, a click on the Back hint leaves it. One race for both
+/// choices: leaving photo mode returns to it, and `config` switches the choice there.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
 fn pulse_ps2_photo_mode_hints_follow_menu_back() {
     let Some(image) = ps2() else { return };
     let profile = Profile::fresh("ps2-photo");
-    for choice in ["original", "circle"] {
+    profile.menu_back("original");
+    let mut script = String::from(
+        "boot; select racebox; press cross; until page=race; select launch_race; \
+         press cross; until screen=picker; press cross; until screen.id=ship-select; \
+         press cross; until stage=race within 4000; ticks 400; ",
+    );
+    for (number, choice) in ["original", "circle"].into_iter().enumerate() {
         let (back, help) = buttons("triangle", choice);
         println!("Photo mode, MENU BACK {choice}: {back} leaves, {help} resets the camera");
-        profile.menu_back(choice);
-        profile.drive(
-            &image,
-            &[],
-            &format!(
-                "boot; select racebox; press cross; until page=race; select launch_race; \
-                 press cross; until screen=picker; press cross; until screen.id=ship-select; \
-                 press cross; until stage=race within 4000; ticks 400; \
-                 escape; until stage=menu; select photo_mode; press cross; \
-                 until photo=free within 200; ticks 5; draw; expect hints={back}; expect hints={help}; \
-                 expect hints=cross; click hint {help}; ticks 10; expect photo=free; \
-                 click hint cross; ticks 10; expect photo=free; \
-                 click hint {back}; until photo=none within 50"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        if number > 0 {
+            script.push_str(&format!("config controls.menu_back={choice}; "));
+        }
+        script.push_str(&format!(
+            "escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; draw; expect hints={back}; expect hints={help}; \
+             expect hints=cross; click hint {help}; ticks 10; expect photo=free; \
+             click hint cross; ticks 10; expect photo=free; \
+             click hint {back}; until photo=none within 50; "
+        ));
     }
+    profile.drive(&image, &[], &script, "folded.jsonl");
 }
 
 /// The replay viewer's key legend: a click on `CROSS PLAY` pauses the recording that is playing,
@@ -409,30 +414,32 @@ fn hd_track_select_hints_confirm_and_leave() {
 /// Pure's PSP executable binds `backward` and `cancel` to the triangle
 /// (`docs/ghidra/functions/psp-pure-usa/input.md`), and its footers draw the triangle beside `BACK`
 /// in the `Stats` face. Back leaves on the triangle and not the circle, the footer's `BACK` hint
-/// leaves, and under MENU BACK `circle` the footer draws the circle and the hint presses it.
+/// leaves, and under MENU BACK `circle` the footer draws the circle and the hint presses it. One
+/// launch for both: `config` switches the choice where Back left the player.
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn pure_back_is_the_triangle_and_its_footer_hint_presses_the_resolved_button() {
     let Some(image) = oag_testdata::image("pure-psp-eu.chd") else {
         return;
     };
-    let reach = "boot; until stage=menu within 3000; select racebox; press cross; \
-                 until page=race; ticks 60";
-    for choice in ["original", "circle"] {
+    let profile = Profile::fresh("pure");
+    profile.menu_back("original");
+    let mut script = String::new();
+    for (number, choice) in ["original", "circle"].into_iter().enumerate() {
         let (back, other) = buttons("triangle", choice);
         println!("Pure race page, MENU BACK {choice}: {back} leaves, {other} does not");
-        let profile = Profile::fresh(&format!("pure-{choice}"));
-        profile.menu_back(choice);
-        profile.drive(
-            &image,
-            &[],
-            &format!(
-                "{reach}; press {other}; ticks 40; expect page=race; draw; expect hints={back}; \
-                 expect hints=cross; click hint {back}; ticks 40; expect page!=race"
-            ),
-            &format!("{choice}.jsonl"),
-        );
+        script.push_str(&format!(
+            "{onto}; select racebox; press cross; until page=race; ticks 60; \
+             press {other}; ticks 40; expect page=race; draw; expect hints={back}; \
+             expect hints=cross; click hint {back}; ticks 40; expect page!=race; ",
+            onto = if number == 0 {
+                "boot; until stage=menu within 3000".to_string()
+            } else {
+                format!("config controls.menu_back={choice}")
+            }
+        ));
     }
+    profile.drive(&image, &[], &script, "folded.jsonl");
 }
 
 /// The name prompt's hint line (Pulse's own `TagInput` row) is a click target: `CROSS/START
