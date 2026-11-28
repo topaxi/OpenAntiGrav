@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-28).
+Accepted (2026-11-28). Note (2026-11-28): the failed-load case in Context was already fixed on `main` by a837083aa before step 2; step 2 moved the guard onto the run (`drive_ground_truth::tournament::a_tournament_leg_that_will_not_load_ends_the_tournament`).
 
 ## Context
 
