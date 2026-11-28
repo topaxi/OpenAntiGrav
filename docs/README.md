@@ -35,7 +35,7 @@ New to the project? Read these in order:
 3. [Status map](overview/status.md) - the cross-title matrix: what is built, read, or verified, per weapon/mode/subsystem/title
 4. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
 5. [Legal](overview/legal.md) - the no-copyrighted-content policy
-6. [Installing and running](overview/installing.md) - for a player: download, where the game files go on each OS, what the file names can be, what goes wrong
+6. [Installing and running](overview/installing.md) - for a player: download, where the game files go on each OS, what the file names can be, what goes wrong. [Get a working image from your own copy](tools/your-own-images.md) says which file each title needs
 7. [Developing](overview/developing.md) - for a contributor: tools, a first session, the gate, where things live
 8. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
 9. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
@@ -52,6 +52,7 @@ Then, depending on what you are here to do:
 | Read a short standalone spec, without the evidence trail | [Specs](specs/README.md) |
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
+| Make a working image from a game you own | [Your own images](tools/your-own-images.md) |
 | Mod the game: tracks, AI pilots, menu rows | [Modding guide](tools/modding.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
 | Build or sideload the Android APK | [Android](tools/android.md) |

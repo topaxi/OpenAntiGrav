@@ -44,6 +44,8 @@ movies).
 what `release.yml` builds (artifact names, the zero-game-content check, how a
 release is cut).
 
+[Get a working image from your own copy](your-own-images.md) is the player's page: which file or folder each title needs, and the route to it from your own copy.
+
 All are run through `just` for convenience:
 
 ```sh
