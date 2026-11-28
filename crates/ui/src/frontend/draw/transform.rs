@@ -36,7 +36,7 @@ impl Draw {
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
             Self::GradientFill { left, .. } | Self::GradientSprite { left, .. } => Some(left),
-            Self::Stretched { text, .. } => text.colour_mut(),
+            Self::Stretched { text, .. } | Self::Magnified { text, .. } => text.colour_mut(),
             Self::Video { .. }
             | Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
@@ -136,6 +136,15 @@ impl Draw {
                 }
             }
             Self::Stretched { text, .. } => text.zoom(origin, scale, alpha),
+            Self::Magnified {
+                factor,
+                offset,
+                text,
+            } => {
+                text.fade(alpha);
+                *factor *= scale;
+                *offset = (about(offset.0, origin.0), about(offset.1, origin.1));
+            }
             // A movie and the point-cloud pass have no alpha channel to fade
             // and are never part of a page; a text's or a sprite's glow stamp follows the quads
             // of the draw before it, which moved with it.
@@ -173,6 +182,7 @@ impl Draw {
                 }
             }
             Self::Stretched { text, .. } => text.shift_x(dx),
+            Self::Magnified { offset, .. } => offset.0 += dx,
             Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
             | Self::GlowText { .. }

@@ -946,6 +946,11 @@ law for the draw and every measure of it (`run_width`, alignment, wrap, the hint
 **Pulse PS2 is measured, no longer inherited.** **Cross-title: HD, Omega and 2048 are not affected** (they keep the advance-only pen,
 `bearing_pens` off).
 
+**During a page change (chosen, not measured).** The step is measured on resting pages only. A page part-way through a change lays its
+text out as the resting page does and scales the finished glyph quads (`oag_ui::frontend::Draw::Magnified`, every title). Laying it out
+at each frame's zoomed scale rounds every pen afresh, and the letters of a line shift against each other as the page grows. Test:
+`render::magnify_tests::a_zoomed_pages_glyphs_are_the_resting_ones_scaled_as_a_block`.
+
 ## Pure's glyph quads are whole pixels (2026-11-23, `pure-leftovers`)
 
 **Law (confidence 85 on the Stats face at 0.8, 75 on the menu face at 1.15 and 0.97).** Each glyph is a PSP sprite: its quad

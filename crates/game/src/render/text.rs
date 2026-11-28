@@ -389,6 +389,20 @@ impl Renderer {
     }
 }
 
+/// Takes `quads` to `quad * factor + offset`: the transform of a
+/// [`oag_ui::frontend::Draw::Magnified`] text, laid out at rest.
+pub(super) fn magnify_quads(quads: &mut [Quad], factor: f32, offset: (f32, f32)) {
+    for quad in quads {
+        let [x, y, w, h] = quad.rect;
+        quad.rect = [
+            x * factor + offset.0,
+            y * factor + offset.1,
+            w * factor,
+            h * factor,
+        ];
+    }
+}
+
 /// Scales `quads` horizontally by `x_scale` about `anchor`: the second axis of a
 /// [`oag_ui::frontend::Draw::Stretched`] text, whose own layout used the vertical scale.
 pub(super) fn stretch_quads(quads: &mut [Quad], anchor: f32, x_scale: f32) {

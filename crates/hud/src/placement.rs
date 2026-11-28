@@ -120,6 +120,27 @@ pub(super) fn place_mut(draw: &mut Draw, p: &Placement) -> bool {
             inside(*x, *y, p.clip)
         }
         Draw::Stretched { text, .. } => place_mut(text, p),
+        // The text stays at rest; its transform takes the placement after its own.
+        Draw::Magnified {
+            factor,
+            offset,
+            text,
+        } => {
+            let anchor = match text.unstretched() {
+                Draw::Text { x, y, .. } | Draw::FacedText { x, y, .. } => (*x, *y),
+                _ => (0.0, 0.0),
+            };
+            *factor *= p.scale;
+            *offset = (
+                offset.0 * p.scale + p.offset[0],
+                offset.1 * p.scale + p.offset[1],
+            );
+            inside(
+                anchor.0 * *factor + offset.0,
+                anchor.1 * *factor + offset.1,
+                p.clip,
+            )
+        }
         Draw::Video { .. }
         | Draw::FuryBackdrop(_)
         | Draw::SceneBackdrop(_)

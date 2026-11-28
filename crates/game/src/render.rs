@@ -801,6 +801,15 @@ impl Renderer {
                 }
                 segments.push((self.quads.len() as u32, rect));
             }
+            // A page in transition lays its text out at rest, then scales the quads.
+            let (draw, magnify) = match draw {
+                Draw::Magnified {
+                    factor,
+                    offset,
+                    text,
+                } => (text.as_ref(), Some((*factor, *offset))),
+                other => (other, None),
+            };
             // A stretched text is laid out as its text, then its quads are scaled about its anchor.
             let (draw, stretch) = match draw {
                 Draw::Stretched { x_scale, text } => (text.as_ref(), Some(*x_scale)),
@@ -812,7 +821,7 @@ impl Renderer {
             }
             match draw {
                 // Unwrapped above.
-                Draw::Stretched { .. } => {}
+                Draw::Stretched { .. } | Draw::Magnified { .. } => {}
                 Draw::GlowStamp { rect, value } => stamps.push(glow::Stamp::Value(*rect, *value)),
                 Draw::GlowTexel => stamps.extend(
                     self.quads[last_sprite.clone()]
@@ -1051,6 +1060,9 @@ impl Renderer {
             }
             if let (Some(k), Draw::Text { x, .. }) = (stretch, draw) {
                 text::stretch_quads(&mut self.quads[quads_before..], *x, k);
+            }
+            if let Some((factor, offset)) = magnify {
+                text::magnify_quads(&mut self.quads[quads_before..], factor, offset);
             }
             if matches!(draw, Draw::Text { .. } | Draw::FacedText { .. }) {
                 last_text = quads_before..self.quads.len();
@@ -1382,6 +1394,8 @@ mod atlas_limit_tests;
 mod fly_by_tests;
 #[cfg(test)]
 mod glow_tests;
+#[cfg(test)]
+mod magnify_tests;
 #[cfg(test)]
 mod prompt_tests;
 #[cfg(test)]

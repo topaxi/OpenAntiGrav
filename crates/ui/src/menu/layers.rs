@@ -107,7 +107,14 @@ impl Layers {
     #[must_use]
     pub fn zoomed(mut self, origin: (f32, f32), scale: f32, alpha: f32) -> Self {
         for draw in &mut self.body {
-            draw.zoom(origin, scale, alpha);
+            // Text keeps the resting page's layout and is scaled once laid out
+            // ([`Draw::Magnified`]); everything else scales as it stands.
+            if draw.is_text() {
+                draw.fade(alpha);
+                *draw = draw.clone().magnified(origin, scale);
+            } else {
+                draw.zoom(origin, scale, alpha);
+            }
         }
         for draw in &mut self.chrome {
             // Faded but not moved, which is the split the capture shows.

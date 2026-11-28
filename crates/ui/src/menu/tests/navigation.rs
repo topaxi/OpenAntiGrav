@@ -135,6 +135,12 @@ fn a_zoom_fades_both_layers() {
 fn first_text_at(draws: &[Draw]) -> Option<(f32, f32)> {
     draws.iter().find_map(|draw| match draw {
         Draw::Text { x, y, .. } => Some((*x, *y)),
+        Draw::Magnified {
+            factor,
+            offset,
+            text,
+        } => first_text_at(std::slice::from_ref(text))
+            .map(|(x, y)| (x * factor + offset.0, y * factor + offset.1)),
         _ => None,
     })
 }

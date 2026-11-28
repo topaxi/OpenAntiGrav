@@ -339,6 +339,18 @@ pub enum Draw {
         /// The [`Self::Text`] being stretched.
         text: Box<Draw>,
     },
+    /// A text on a page part-way through a change: `text` is laid out as the resting page lays
+    /// it out, and its glyph quads then go to `quad * factor + offset`. Laying it out at the
+    /// zoomed scale instead rounds each snapped pen afresh every frame, so the letters shift
+    /// against each other. Built by [`Self::magnified`].
+    Magnified {
+        /// The page's scale.
+        factor: f32,
+        /// Where the grid's own origin lands.
+        offset: (f32, f32),
+        /// The text, as the resting page has it.
+        text: Box<Draw>,
+    },
     /// [`Self::Text`], drawn in a **named font role** rather than whatever
     /// face the frame is already bound to.
     ///
@@ -380,6 +392,31 @@ pub enum Draw {
 }
 
 impl Draw {
+    /// Whether this is text, however it is wrapped.
+    #[must_use]
+    pub fn is_text(&self) -> bool {
+        match self {
+            Self::Text { .. } | Self::FacedText { .. } => true,
+            Self::Stretched { text, .. } | Self::Magnified { text, .. } => text.is_text(),
+            _ => false,
+        }
+    }
+
+    /// `self`, a text, scaled by `factor` about `origin` once it is laid out: itself when
+    /// `factor` is one.
+    #[must_use]
+    pub fn magnified(self, origin: (f32, f32), factor: f32) -> Self {
+        if factor == 1.0 {
+            self
+        } else {
+            Self::Magnified {
+                factor,
+                offset: (origin.0 * (1.0 - factor), origin.1 * (1.0 - factor)),
+                text: Box::new(self),
+            }
+        }
+    }
+
     /// The draw a [`Self::Stretched`] wraps, `self` otherwise: what a reader of a list's text
     /// matches on.
     #[must_use]
