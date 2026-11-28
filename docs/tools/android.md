@@ -236,6 +236,23 @@ both frames. Nothing is `unsafe`. The remaining 144 KiB is the front end's first
 the stage values (`MenuStage` 34.6 KB, `LoadingStage` 24.8 KB, `FrontendStage` 19.9 KB by `-Zprint-type-sizes`) sit in the frame is not read.
 `check-android-stack.py` keeps `open_with` under 160 KiB (`RESIDENT_CEILINGS`) and `Stage::race` under 64 KiB; the 356.1 KiB library fails it.
 
+**A type held by value grows every frame above it** (2026-11-28, nightly run
+46091145845). `open_with` reached 392.1 KiB and failed the build. Commit `7e3d1c090`
+had added `playing: [Option<Playing>; MAX_PROJECTILES]` (128 slots) to
+`TravelVoices`, which `SfxVoices` holds five times, so `oag_sound::Audio`, held by
+value in `App`, reached 158,640 bytes (`-Zprint-type-sizes`). `TravelVoices` now keeps
+its slots in one `Box<[Slot]>`, with a compile-time 4 KiB ceiling on the struct.
+Same `dist` build, KiB:
+
+| Function | Last green nightly | Failing | Fixed |
+| --- | --- | --- | --- |
+| `App::open_with` | under 160 | 392.1 | 120.1 |
+| `app::launch` | 256.0 | 529.1 | 229.1 |
+| `headless::race_launch` | 308.2 | 540.2 | 296.2 |
+
+No gate recipe builds the Android library, so `check-android-stack.py` itself only
+runs from `scripts/build-apk.sh`.
+
 **On the S21** (Galaxy S21, Android 14, the `dist` APK of this change, media volume 0,
 `--no-audio`, `--autopilot`, `--frame-log`, default settings): the launch-file
 `--race` finishes the race on Pulse (Talon's Junction, 3 laps, 1:49.35, process alive

@@ -20,14 +20,24 @@ use super::layers::{self, Where};
 use super::repeating::TICK_SECONDS;
 use super::{Banks, Cue, Playing};
 
-/// One weapon's held voices per projectile slot, empty where it does not
-/// occupy the slot: one looping voice from a title's own bank, every voice the
-/// event starts from a Wwise event ([`Banks::held_voices`]), or the open list of
-/// a cue that runs one ([`Banks::program`]).
+/// One weapon's held voices per projectile slot.
 #[derive(Debug, Clone)]
 pub(super) struct TravelVoices {
-    voices: [Vec<VoiceId>; MAX_PROJECTILES],
-    playing: [Option<Playing>; MAX_PROJECTILES],
+    /// [`MAX_PROJECTILES`] long, on the heap: inline, it grows `Audio` past what the
+    /// Android main thread's frames hold (`docs/tools/android.md`, "The stack").
+    slots: Box<[Slot]>,
+}
+
+const _: () = assert!(std::mem::size_of::<TravelVoices>() <= 4096);
+
+/// What one projectile slot holds, empty where the weapon does not occupy it:
+/// one looping voice from a title's own bank, every voice the event starts from
+/// a Wwise event ([`Banks::held_voices`]), or the open list of a cue that runs
+/// one ([`Banks::program`]).
+#[derive(Debug, Clone, Default)]
+struct Slot {
+    voices: Vec<VoiceId>,
+    playing: Option<Playing>,
 }
 
 /// Where a voice at `at` is heard from, `radius` its emitter's.
@@ -49,8 +59,7 @@ impl TravelVoices {
     /// No voices open yet.
     pub(super) fn new() -> Self {
         Self {
-            voices: std::array::from_fn(|_| Vec::new()),
-            playing: std::array::from_fn(|_| None),
+            slots: (0..MAX_PROJECTILES).map(|_| Slot::default()).collect(),
         }
     }
 
@@ -94,8 +103,9 @@ impl TravelVoices {
         cue: Cue,
         radius: f32,
     ) {
+        let slot = &mut self.slots[slot];
         if let Some(program) = banks.program(cue) {
-            let playing = &mut self.playing[slot];
+            let playing = &mut slot.playing;
             match at {
                 Some(at) => {
                     let place = heard(at, radius, listener);
@@ -119,7 +129,7 @@ impl TravelVoices {
             }
             return;
         }
-        let held = &mut self.voices[slot];
+        let held = &mut slot.voices;
         // Forget a handle the pool reclaimed before the bolt ended (starved, not
         // stopped), so a later tick does not stop whatever the pool gave it next.
         let was_held = !held.is_empty();
@@ -172,13 +182,11 @@ impl TravelVoices {
 
     /// Releases every held voice, for [`super::Audio::stop_race_sfx`].
     pub(super) fn stop_all(&mut self, mixer: &mut Mixer) {
-        for playing in self.playing.iter_mut().filter_map(Option::take) {
+        for playing in self.slots.iter_mut().filter_map(|s| s.playing.take()) {
             playing.stop(mixer);
         }
-        for held in &mut self.voices {
-            for id in held.drain(..) {
-                mixer.stop(id);
-            }
+        for id in self.slots.iter_mut().flat_map(|s| s.voices.drain(..)) {
+            mixer.stop(id);
         }
     }
 }
