@@ -181,7 +181,7 @@ impl Session {
                 );
                 self.renderer_set_sprites(&campaign.sprites);
                 let phases = self.selector_phases;
-                if let Stage::Menu(menu_stage) = &mut self.stage {
+                if let Stage::Menu(menu_stage) = self.stack.top_mut() {
                     let mut stage = CampaignStage::new(
                         campaign.grids,
                         campaign.grid_layout,
@@ -218,7 +218,7 @@ impl Session {
     /// Keeps where an open campaign screen stands, for a process that is ending
     /// with it open (a window closed on `Cell Selection`).
     pub(crate) fn keep_campaign_position(&mut self) {
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(campaign) = stage.campaign.as_mut()
         {
             keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
@@ -230,7 +230,7 @@ impl Session {
     ///
     /// The home is the run's: the one being launched, else the race on screen's.
     pub(crate) fn restore_campaign_home(&mut self) {
-        let run = match (&mut self.run, &mut self.stage) {
+        let run = match (&mut self.run, self.stack.top_mut()) {
             (Some(run), _) if run.campaign_home.is_some() => Some(run),
             (_, Stage::Race(stage)) => Some(&mut stage.run),
             _ => None,
@@ -274,7 +274,7 @@ impl Session {
     /// the next frame's draw and a campaign screen carries no `take_sheet`
     /// dance of its own the way a picker's slideshow does.
     fn renderer_set_sprites(&mut self, sheet: &oag_hud::sprite::Sheet) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage
                 .renderer
                 .set_sprites(&self.gpu.device, &self.gpu.queue, sheet);
@@ -284,14 +284,14 @@ impl Session {
     /// One tick of an open campaign screen: its pad input, its pointer, and
     /// what came of either.
     pub(crate) fn tick_campaign(&mut self, pointer: &oag_ui::pointer::Pointer) {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         let Some(campaign) = stage.campaign.as_ref() else {
             return;
         };
         let roles = self.roles_with_help(campaign.cell_help_button());
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(campaign) = stage.campaign.as_mut() else {
@@ -328,7 +328,7 @@ impl Session {
     /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
         if event == Event::Back
-            && matches!(&self.stage, Stage::Menu(stage)
+            && matches!(self.stack.top(), Stage::Menu(stage)
                 if stage.campaign.as_ref().is_some_and(|campaign| campaign.editor.is_some()))
         {
             self.editor_back();
@@ -337,9 +337,9 @@ impl Session {
         let nav = self.campaign_nav(event);
         self.play_navs(nav);
         // Whatever cell was just confirmed, read out here and acted on
-        // *after* this borrow of `self.stage` ends below - `launch_campaign_cell`
+        // *after* this borrow of `self.stack` ends below - `launch_campaign_cell`
         // needs `&mut self` for `self.race_options`/`self.shell`/`self.records`,
-        // which cannot start while `stage`/`campaign` still borrow `self.stage`.
+        // which cannot start while `stage`/`campaign` still borrow `self.stack`.
         let mut confirmed_cell = None;
         let mut confirmed_difficulty = None;
         // A campaign the chooser offers whose grids this source does not carry.
@@ -347,7 +347,7 @@ impl Session {
         let mut open_map = false;
         let has_map = self.shell.as_ref().is_some_and(|shell| shell.map.is_some());
         {
-            let Stage::Menu(stage) = &mut self.stage else {
+            let Stage::Menu(stage) = self.stack.top_mut() else {
                 return;
             };
             let Some(campaign) = stage.campaign.as_mut() else {
@@ -721,7 +721,7 @@ impl Session {
         run.campaign_ai_skill_scale = ai_skill_scale;
         run.tournament =
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.pure_chain = None;
             if let Some(mut campaign) = stage.campaign.take() {
                 keep_cursor(&mut self.records, &mut self.selector_phases, &mut campaign);
@@ -857,7 +857,7 @@ impl Session {
     /// Shows `literal` (or the string `id` names) a row above the campaign
     /// screen's footer until the player does anything else.
     fn campaign_notice(&mut self, id: &str, literal: &str) {
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(campaign) = stage.campaign.as_mut()
         {
             campaign.notice = Some(campaign.strings.get_or_fallback(id, literal).to_string());

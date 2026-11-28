@@ -60,7 +60,7 @@ impl Session {
             && web::take_fullscreen_exit()
         {
             self.settings.display.window_mode = display::WindowMode::Windowed;
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = self.stack.top_mut() {
                 stage.menu.seed(
                     "display.window_mode",
                     &menu::Value::Text(display::WindowMode::Windowed.to_string()),
@@ -351,7 +351,7 @@ impl Session {
             "graphics.hud_safe_area" => match text.parse::<u8>() {
                 Ok(percent) => {
                     self.settings.graphics.hud_safe_area = Some(percent);
-                    if let (Some(shell), Stage::Menu(stage)) = (&self.shell, &mut self.stage) {
+                    if let (Some(shell), Stage::Menu(stage)) = (&self.shell, self.stack.top_mut()) {
                         stage
                             .renderer
                             .set_inset(shell.title.hud_art.safe_area_scale(Some(percent)));
@@ -705,7 +705,7 @@ impl Session {
                     profile.screen_filter = text.clone();
                 }
                 // The strength row leaves the page for a filter that has none.
-                if let Stage::Menu(stage) = &mut self.stage {
+                if let Stage::Menu(stage) = self.stack.top_mut() {
                     crate::screen::offer_strength_row(&mut stage.menu, &self.screen_filters);
                 }
             }
@@ -896,7 +896,7 @@ impl Session {
             "graphics.camera_view" => match text.parse::<display::CameraView>() {
                 Ok(view) => {
                     self.settings.graphics.camera_view = view;
-                    if let Stage::Race(stage) = &mut self.stage {
+                    if let Stage::Race(stage) = self.stack.top_mut() {
                         stage.race.set_camera_view(view);
                     }
                 }
@@ -1117,7 +1117,7 @@ impl Session {
     pub(crate) fn cycle_camera_view(&mut self) {
         let next = self.settings.graphics.camera_view.next();
         self.settings.graphics.camera_view = next;
-        if let Stage::Race(stage) = &mut self.stage {
+        if let Stage::Race(stage) = self.stack.top_mut() {
             stage.race.set_camera_view(next);
         }
         // Nothing re-seeds the menu here: `settings::menu_seeds` reads
@@ -1149,7 +1149,7 @@ impl Session {
     ///
     /// Takes `awaiting_binding` and `controls` apart from `self` rather than
     /// as a `&mut self` method: `Session::frame` calls this from inside a
-    /// `match &mut self.stage` arm, and a `&mut self` receiver there would
+    /// `match self.stack.top_mut()` arm, and a `&mut self` receiver there would
     /// borrow a field the match already holds.
     pub(crate) fn maybe_begin_binding(
         awaiting_binding: &mut Option<input::Button>,

@@ -195,14 +195,14 @@ impl Session {
     /// no HUD either. The loading screen is a different stage, so a race that
     /// is still loading is not [`Self::racing`] at all.
     fn race_drawing(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if stage.race.hud_shown())
+        matches!(self.stack.top(), Stage::Race(stage) if stage.race.hud_shown())
     }
 
     /// Whether the race is running and the overlay should read fingers: photo mode and the
     /// replay viewer own the screen, and their taps are theirs.
     fn racing(&self) -> bool {
         overlay_reads_fingers(
-            matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished()),
+            matches!(self.stack.top(), Stage::Race(stage) if !stage.race.core.sim.finished()),
             self.photo.is_some(),
             self.viewer.is_some(),
             self.on_benchmark(),

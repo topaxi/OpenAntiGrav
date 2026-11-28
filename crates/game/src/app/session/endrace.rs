@@ -35,7 +35,7 @@ impl Session {
     /// the screens - is expensive enough that retrying it per frame is a
     /// performance bug rather than a log one.
     pub(crate) fn build_endrace(&mut self) {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         // A demo that finishes is over: no results, no end-of-race voice.
@@ -70,7 +70,7 @@ impl Session {
             self.mark_endrace_unavailable();
             return;
         };
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         let (Some(shell), Some(race_options)) = (self.shell.as_ref(), self.race_options.as_ref())
@@ -423,7 +423,7 @@ impl Session {
         .filter(|_| !split);
         let tournament_next_leg = !split && self.tournament_has_next_leg();
         let watch_replay = WatchReplayOffer {
-            recorded: matches!(&self.stage, Stage::Race(stage) if stage.auto_replay),
+            recorded: matches!(self.stack.top(), Stage::Race(stage) if stage.auto_replay),
             original_menu: self.original_menu,
             tournament_next_leg,
             networked: self.net.is_some(),
@@ -449,7 +449,7 @@ impl Session {
         if let Some(roster) = field_roster {
             runtime.follow_board(roster, board_revision);
         }
-        if let Stage::Race(stage) = &mut self.stage {
+        if let Stage::Race(stage) = self.stack.top_mut() {
             stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
         }
     }
@@ -458,7 +458,7 @@ impl Session {
     /// [`Self::build_endrace`] stops at its own guard from the next frame
     /// on. See `RaceStage::endrace_unavailable`.
     pub(super) fn mark_endrace_unavailable(&mut self) {
-        if let Stage::Race(stage) = &mut self.stage {
+        if let Stage::Race(stage) = self.stack.top_mut() {
             stage.endrace_unavailable = true;
         }
     }
@@ -472,7 +472,7 @@ impl Session {
         let mut navs = Vec::new();
         let voice: Option<oag_gameplay::cue::Cue>;
         {
-            let Stage::Race(stage) = &mut self.stage else {
+            let Stage::Race(stage) = self.stack.top_mut() else {
                 return;
             };
             let Some(endrace) = stage.endrace.as_mut() else {
@@ -558,7 +558,7 @@ impl Session {
     fn handle_endrace_menu_option(&mut self, option: MenuOption) {
         match option {
             MenuOption::ViewResultsAgain => {
-                if let Stage::Race(stage) = &mut self.stage
+                if let Stage::Race(stage) = self.stack.top_mut()
                     && let Some(EndRace::Disc(endrace)) = stage.endrace.as_mut()
                 {
                     endrace.view_results_again();
@@ -591,7 +591,7 @@ impl Session {
     /// it from, run in reverse, rather than a parallel "go back to this
     /// cell" mechanism of its own.
     fn return_to_campaign(&mut self) {
-        let cell = match &self.stage {
+        let cell = match self.stack.top() {
             Stage::Race(stage) => stage.run.campaign_cell.clone(),
             _ => None,
         };
@@ -622,7 +622,7 @@ impl Session {
             return;
         }
         self.open_campaign();
-        let Stage::Menu(menu_stage) = &mut self.stage else {
+        let Stage::Menu(menu_stage) = self.stack.top_mut() else {
             return;
         };
         let Some(campaign) = menu_stage.campaign.as_mut() else {
@@ -663,7 +663,7 @@ impl Session {
         // A multiplayer race that was not the campaign's lands back on the RACE page with the
         // same people seated (`Session::reenter_multiplayer`): change the track, race again.
         let multiplayer = matches!(
-            &self.stage,
+            self.stack.top(),
             Stage::Race(stage) if stage.race.view_state().viewport_count() >= 2 && stage.run.campaign_cell.is_none()
         );
         // Whether the tournament just finished its last leg or is being abandoned early, it

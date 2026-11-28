@@ -52,7 +52,7 @@ impl super::Session {
             self.photo_viewer_sync();
             return;
         }
-        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+        let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) else {
             return;
         };
         let Some(photo) = stage.race.photo() else {
@@ -94,9 +94,11 @@ impl super::Session {
     /// The viewer's race moved to the tick the rewind row names, by the viewer's own seek: the
     /// scrub is a seek, and the viewer carries on from where it lands.
     fn photo_viewer_sync(&mut self) {
-        let (Stage::Race(stage), Some(open), Some(active)) =
-            (&mut self.stage, self.photo.as_mut(), self.viewer.as_mut())
-        else {
+        let (Stage::Race(stage), Some(open), Some(active)) = (
+            self.stack.top_mut(),
+            self.photo.as_mut(),
+            self.viewer.as_mut(),
+        ) else {
             return;
         };
         let Some(target) = stage.race.photo().map(|p| p.effects().target_tick()) else {
@@ -122,7 +124,7 @@ impl super::Session {
     /// off, so the mode has a key for it. Read apart from the buttons, whatever the trigger mode.
     pub(super) fn photo_triggers(&mut self, view: &oag_input::view::ViewReading) {
         use oag_input::view::PLAY_PULL;
-        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+        let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) else {
             return;
         };
         let Some(photo) = stage.race.photo() else {
@@ -162,7 +164,7 @@ impl super::Session {
     /// end of the recording, where the row turns itself off. A live race is moved by its
     /// [`Rewind`] and put back to the bit on leaving; a watched one by the viewer.
     pub(super) fn photo_play_tick(&mut self) {
-        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+        let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) else {
             return;
         };
         if !stage.race.photo().is_some_and(|p| p.effects().playing()) {
@@ -259,7 +261,7 @@ impl super::Session {
         // The field the frames are drawn with, which the lens ring is sized in.
         let rect = oag_display::display::viewport(self.gpu.output.size(), self.aspect());
         let (aspect, setting) = (rect.2 / rect.3, self.settings.graphics.fov);
-        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+        let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) else {
             return Err(pending);
         };
         let Some(effects) = stage.race.photo().map(|photo| *photo.effects()) else {
@@ -311,7 +313,7 @@ impl super::Session {
     /// Before a frame is drawn: stands the race at the shot's next frame and returns how far
     /// between its ticks to draw it. `None` with no shot under way.
     pub(super) fn photo_job_prepare(&mut self) -> Option<f32> {
-        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+        let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) else {
             return None;
         };
         let job = open.job.as_mut()?;
@@ -373,7 +375,7 @@ impl super::Session {
             started,
         } = job;
         let frames = u32::from(finished) * shot.plan().frames();
-        if let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) {
+        if let (Stage::Race(stage), Some(open)) = (self.stack.top_mut(), self.photo.as_mut()) {
             let mover = open.rewind.as_mut().zip(stage.keeper.as_mut());
             shot.finish(
                 mover.map(|(rewind, keeper)| Mover { rewind, keeper }),
@@ -396,7 +398,7 @@ impl super::Session {
         };
         // The HUD is drawn once over the average, at the tick the shot is taken at, by the
         // frame that follows (`photo_hud`).
-        let hud = matches!(&self.stage, Stage::Race(stage)
+        let hud = matches!(self.stack.top(), Stage::Race(stage)
             if stage.race.photo().is_some_and(oag_raceplay::photo::Photo::hud));
         if hud && size == self.framebuffer.output_size() {
             if let Some(open) = self.photo.as_mut() {

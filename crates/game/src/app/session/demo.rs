@@ -44,7 +44,7 @@ pub(crate) struct State {
 impl Session {
     /// Whether the race on screen is a demo.
     pub(crate) fn in_demo(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if stage.demo.is_some())
+        matches!(self.stack.top(), Stage::Race(stage) if stage.demo.is_some())
     }
 
     /// Whether the race on screen draws no HUD: a demo's (measured on Pulse PSP), and a watched
@@ -71,7 +71,7 @@ impl Session {
 
     /// Whether the demo on screen, or loading, ignores input: a wallpaper.
     pub(crate) fn demo_is_wallpaper(&self) -> bool {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => stage.demo.as_ref().is_some_and(Run::wallpaper),
             _ => self.demo.loading.as_ref().is_some_and(Run::wallpaper),
         }
@@ -80,7 +80,7 @@ impl Session {
     /// Whether the main menu is untouched territory: the title's main page with nothing over it
     /// and nothing parked behind it.
     pub(super) fn attract_eligible(&self) -> bool {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return false;
         };
         stage.menu.depth() == 1
@@ -93,7 +93,7 @@ impl Session {
             && stage.lan.is_none()
             && stage.layout.is_none()
             && stage.assign.is_none()
-            && self.suspended_race.is_none()
+            && self.stack.paused_race().is_none()
             && self.awaiting_binding.is_none()
             && self.net.is_none()
             && self.split_lobby.is_none()
@@ -111,7 +111,7 @@ impl Session {
         // A button press, any key, the mouse or a finger. **Not `pad_spoke`**, which also reads a
         // stick off centre: 2 s of full stick left the original's demo running (measured).
         let input = key || self.controls.buttons().pressed_mask() != 0 || !pointer.is_idle();
-        match &self.stage {
+        match self.stack.top() {
             Stage::Menu(_) => {
                 let eligible = self.attract_eligible();
                 let idle = self.demo_timing(title).idle;
@@ -131,7 +131,7 @@ impl Session {
                 let finished = stage.race.core.sim.finished();
                 let length = self.demo_timing(title).length;
                 let frozen = self.pause.frozen();
-                let Stage::Race(stage) = &mut self.stage else {
+                let Stage::Race(stage) = self.stack.top_mut() else {
                     return false;
                 };
                 let Some(run) = stage.demo.as_mut() else {

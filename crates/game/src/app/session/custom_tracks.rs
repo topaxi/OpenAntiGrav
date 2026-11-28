@@ -53,7 +53,7 @@ impl Session {
     /// suspended behind its pause menu (a survey under way waits until the menus are back);
     /// when the read has just finished, re-lists the rows that read that row's setting.
     pub(crate) fn poll_custom_tracks(&mut self) {
-        let (on_screen, anywhere) = match &self.stage {
+        let (on_screen, anywhere) = match self.stack.top() {
             crate::app::stage::Stage::Menu(stage) => (
                 custom_title_row(stage.menu.page().entries.iter()),
                 custom_title_row(
@@ -67,8 +67,8 @@ impl Session {
             ),
             _ => (None, None),
         };
-        let in_menus = matches!(&self.stage, crate::app::stage::Stage::Menu(_));
-        let racing = !in_menus || self.suspended_race.is_some();
+        let in_menus = matches!(self.stack.top(), crate::app::stage::Stage::Menu(_));
+        let racing = !in_menus || self.stack.paused_race().is_some();
         self.custom_tracks.hold(racing);
         if on_screen.is_some() && !racing {
             self.custom_tracks.begin();

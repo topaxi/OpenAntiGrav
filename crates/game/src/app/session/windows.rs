@@ -338,9 +338,9 @@ impl Session {
         let window = index + 1;
         let screen = self.screens.remove(index);
         self.focus.forget(screen.output.window.id());
-        let race = match &mut self.stage {
+        let race = match self.stack.top_mut() {
             Stage::Race(stage) => Some(&mut stage.race),
-            _ => self.suspended_race.as_mut().map(|stage| &mut stage.race),
+            _ => self.stack.paused_race_mut().map(|stage| &mut stage.race),
         };
         let mut slots = Vec::new();
         if let Some(race) = race {
@@ -438,9 +438,9 @@ impl Session {
     /// Every window's seats, window 1 first, for a race dealt across windows (on screen or
     /// parked behind the pause menu), or none.
     fn window_seats(&self) -> Vec<Vec<usize>> {
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             Stage::Race(stage) => Some(&stage.race),
-            Stage::Menu(_) => self.suspended_race.as_ref().map(|stage| &stage.race),
+            Stage::Menu(_) => self.stack.paused_race().map(|stage| &stage.race),
             _ => None,
         };
         match race {
@@ -456,7 +456,8 @@ impl Session {
     /// Whether the race on screen reads its keys per window: dealt across windows and not
     /// parked behind a menu, which window 1's keyboard (the first seat's) drives.
     pub(crate) fn keys_by_window(&self) -> bool {
-        self.screens_opened && matches!(&self.stage, Stage::Race(stage) if stage.race.windowed())
+        self.screens_opened
+            && matches!(self.stack.top(), Stage::Race(stage) if stage.race.windowed())
     }
 
     /// The index of window `id` among the run's windows (window 1 is 0), if it is one.
@@ -502,7 +503,7 @@ impl Session {
         // The keyboards are told apart for as long as the LOCAL MULTIPLAYER flow is on the menus:
         // the join screen, the layout, the RACE page and the seats' Ship Select all read a seat's
         // device (`Controls::lobby_key`). Never in a race, which routes them by seat.
-        let joining = matches!(&self.stage, Stage::Menu(stage)
+        let joining = matches!(self.stack.top(), Stage::Menu(stage)
             if stage.join.is_some()
                 || stage.layout.is_some()
                 || stage.assign.is_some()
@@ -612,7 +613,7 @@ impl Session {
     /// are spent whether or not the race is paused, so a click while it ran cannot pause later.
     pub(crate) fn take_seat_clicks(&mut self) -> u8 {
         let clicks = std::mem::take(&mut self.seat_clicks);
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return 0;
         };
         let seats: Vec<&[usize]> = stage
@@ -626,11 +627,11 @@ impl Session {
 
     /// Whether the race on screen (or parked behind the pause menu) is dealt across windows.
     pub(crate) fn windowed_race(&self) -> bool {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => stage.race.windowed(),
             Stage::Menu(_) => self
-                .suspended_race
-                .as_ref()
+                .stack
+                .paused_race()
                 .is_some_and(|stage| stage.race.windowed()),
             _ => false,
         }
@@ -642,10 +643,10 @@ impl Session {
     ///
     /// [`RaceStage::begin_frame`]: crate::app::race_stage::RaceStage::begin_frame
     pub(crate) fn begin_scene_frame(&mut self) {
-        if let Stage::Race(stage) = &mut self.stage {
+        if let Stage::Race(stage) = self.stack.top_mut() {
             stage.begin_frame();
         }
-        if let Some(stage) = self.suspended_race.as_mut() {
+        if let Some(stage) = self.stack.paused_race_mut() {
             stage.begin_frame();
         }
     }
@@ -727,9 +728,9 @@ impl Session {
     /// Whether the race on screen (or parked behind the pause menu) gives window `window`
     /// something to draw.
     fn window_has_seats(&self, window: usize) -> bool {
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             Stage::Race(stage) => Some(&stage.race),
-            Stage::Menu(_) => self.suspended_race.as_ref().map(|stage| &stage.race),
+            Stage::Menu(_) => self.stack.paused_race().map(|stage| &stage.race),
             _ => None,
         };
         race.is_some_and(|race| race.windowed() && !race.window_drawn(window).is_empty())
@@ -784,7 +785,7 @@ impl Session {
         // The tick exactly while the race is held for any reason - paused and counting a
         // resume down alike (`pause::State::frozen`, the gate `Session::draw` reads for window
         // 1) - and between the last two ticks while it runs.
-        let alpha = match &self.stage {
+        let alpha = match self.stack.top() {
             Stage::Race(_) => {
                 oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.pause.frozen())
             }
@@ -793,9 +794,9 @@ impl Session {
         let pvs_culling = self.pvs_culling();
         let preset = self.screen_filters.get(&profile.screen_filter).cloned();
         let native = self.native_size();
-        let Some(stage) = (match &mut self.stage {
-            Stage::Race(stage) => Some(stage),
-            _ => self.suspended_race.as_mut(),
+        let Some(stage) = (match self.stack.top_mut() {
+            Stage::Race(stage) => Some(&mut **stage),
+            _ => self.stack.paused_race_mut(),
         }) else {
             return;
         };
@@ -938,7 +939,7 @@ impl Session {
         // showing the frozen race under the menus' own pause tint (`PAUSE_OVERLAY`, the alpha
         // window 1's menu is drawn over the parked race with), a stopgap for the menu itself,
         // which only window 1 has. **Chosen, not measured.**
-        if matches!(self.stage, Stage::Menu(_)) && self.suspended_race.is_some() {
+        if matches!(self.stack.top(), Stage::Menu(_)) && self.stack.paused_race().is_some() {
             line.push(Draw::Fill {
                 rect: [0.0, 0.0, space.size.0, space.size.1],
                 color: crate::app::menu_stage::PAUSE_OVERLAY,

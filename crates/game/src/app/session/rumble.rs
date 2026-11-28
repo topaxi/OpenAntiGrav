@@ -8,7 +8,7 @@ impl Session {
     /// patterns.
     pub(crate) fn arm_rumble(&mut self) {
         self.stop_rumble();
-        let (Stage::Race(stage), Some(title)) = (&self.stage, self.title_raced()) else {
+        let (Stage::Race(stage), Some(title)) = (self.stack.top(), self.title_raced()) else {
             return;
         };
         self.rumbler =

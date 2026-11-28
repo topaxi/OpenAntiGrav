@@ -1,5 +1,5 @@
-//! What escape does, and the other half of leaving a race: parking it in
-//! [`Session::suspended_race`] and swapping it back in later.
+//! What escape does, and the other half of leaving a race: pausing it under
+//! the menus on the activity stack and popping back to it later.
 //!
 //! Split out of `session/menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py` - a move, with no behaviour change. This is
@@ -56,13 +56,58 @@ impl Session {
     /// Swaps the menus for the race `escape` parked over them - the other half
     /// of [`Session::open_menus`] parking one. Reached only from
     /// [`Session::handle_menu`], on [`oag_ui::menu::MenuEvent::Closed`] while
-    /// [`Session::suspended_race`] holds something.
+    /// a race is paused under the menus: a pop.
     ///
     /// A no-op if nothing is parked, which cannot happen through
     /// `handle_menu`'s own guard but is cheap to make true unconditionally
     /// rather than only where it is currently checked.
     pub(crate) fn resume_race(&mut self) {
-        let Some(mut stage) = self.suspended_race.take() else {
+        if self.stack.paused_race_depth() != Some(1) {
+            return;
+        }
+        let Some(menus) = self.pop_activity() else {
+            return;
+        };
+        // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
+        // last picture, so a later `escape` does not flash black waiting for
+        // the restarted feed's first frame.
+        self.held_menu_backdrop = match menus {
+            Stage::Menu(mut stage) => stage
+                .backdrop
+                .as_mut()
+                .and_then(|backdrop| backdrop.held.take()),
+            _ => None,
+        };
+        self.resumed();
+    }
+
+    /// A race paused under the menus is dropped, on a thread of its own: releasing a whole race
+    /// scene measured 86 ms on the frame thread (`docs/architecture/race-load-transition.md`).
+    pub(crate) fn drop_paused_race(&mut self) {
+        if let Some(parked) = self.stack.take_paused_race() {
+            crate::app::race_build::drop_off_thread(parked);
+        }
+    }
+
+    /// Back to the entry under the top, which is returned. A run that no entry left names ends
+    /// with it: the pending one is dropped (`Session::end_run`); a race's went with its race.
+    /// The entry now on top is not told it is resumed ([`Self::resumed`]).
+    pub(crate) fn pop_activity(&mut self) -> Option<Stage> {
+        let popped = self.stack.pop()?;
+        if popped.run_ended
+            && popped.entry.run.is_some()
+            && self.run.as_ref().map(|run| run.id) == popped.entry.run
+        {
+            self.end_run();
+        }
+        Some(popped.entry.activity)
+    }
+
+    /// The entry under a popped one is on top again: what the popped activity changed across
+    /// the session comes back (ADR-0099, decision 4). A race gets its music, sound, rumble and
+    /// window title back; it is not rebuilt.
+    pub(crate) fn resumed(&mut self) {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         // **Cleared, not left as `escape` set it.** `result_saved` means
@@ -76,21 +121,14 @@ impl Session {
         // The race was genuinely captured once, on the way in here - this
         // does not lose that write, only stops it from blocking the next
         // one.
-        stage.result_saved = false;
+        //
+        // A finished race popped back to keeps it set: its result was saved when it finished.
+        if crate::app::activity_stack::rearms_on_resume(stage.race.core.sim.finished()) {
+            stage.result_saved = false;
+        }
         // Its last tick is a trip through the menus ago: drawn as it stands
         // until it steps again, rather than blended from a tick long past.
         stage.race.settle_poses();
-        // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
-        // last picture, so a later `escape` does not flash black waiting for
-        // the restarted feed's first frame.
-        self.held_menu_backdrop = match &mut self.stage {
-            Stage::Menu(stage) => stage
-                .backdrop
-                .as_mut()
-                .and_then(|backdrop| backdrop.held.take()),
-            _ => None,
-        };
-        self.stage = Stage::Race(stage);
         // Never left mid-freeze by a pause that predates the trip through the
         // menus - see `Session::launch_race`, which resets this for the same
         // reason on a fresh race.
@@ -159,7 +197,7 @@ impl Session {
     ) {
         info!("leaving the campaign race for Cell Selection");
         self.leave_finished_race();
-        self.suspended_race = None;
+        drop(self.stack.take_paused_race());
         self.reopen_cell_selection(cell, difficulty, true);
     }
 
@@ -201,7 +239,7 @@ impl Session {
     ///   first thing a run shows, so behind it is the desktop.
     ///
     /// **Leaving a race parks it, unless the race is over.** A race still
-    /// running is kept in [`Session::suspended_race`] rather than dropped, and
+    /// running is kept under the menus on the stack rather than dropped, and
     /// backing all the way out of the menus resumes it exactly where it was
     /// left - a player who backs out mid-race expects to be able to get back
     /// to it. A finished race is different: there is a results table behind it
@@ -243,7 +281,7 @@ impl Session {
         // results table does not write the file a second time for nothing
         // new to say.
         //
-        // Read into locals and the borrow of `self.stage` ended before
+        // Read into locals and the borrow of `self.stack` ended before
         // `self.records` is touched - the same borrow-splitting
         // `Session::frame`'s own capture uses, and for the same reason:
         // `stage` and `self.records` are different fields of the same
@@ -253,37 +291,37 @@ impl Session {
 
         // The chooser's disc-key prompt takes escape whole, the same rule a
         // menu's modal prompt follows below: escape closes it and does not quit.
-        if let Stage::Launcher(stage) = &mut self.stage
+        if let Stage::Launcher(stage) = self.stack.top_mut()
             && stage.launcher.cancel_entry()
         {
             return;
         }
         // A selection screen takes escape first, as Back - the same rule the
         // modal prompt below follows, one layer up.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.picker.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.picker.is_some()) {
             self.handle_picker(oag_ui_screens::picker::Event::Back);
             return;
         }
         // The Race Campaign's own screens, same rule: `Cell Selection` steps
         // back to `Grid Selection`, which steps back to the menus.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some() && stage.prompt.is_none())
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.campaign.is_some() && stage.prompt.is_none())
         {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
         // The seat assignment screen, which sits after the layout screen: escape is back.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.assign.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.assign.is_some()) {
             self.handle_seat_assign(oag_ui_screens::seat_assign::Event::Back);
             return;
         }
         // The window layout screen, which sits after the join screen: escape is back.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.layout.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.layout.is_some()) {
             self.escape_window_layout();
             return;
         }
         // LAN's lobby or host list (the typed address keyboard, when open, took the key
         // above): escape is back.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.lan.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.lan.is_some()) {
             if self.online.is_some() {
                 self.escape_online();
             } else {
@@ -292,18 +330,18 @@ impl Session {
             return;
         }
         // The split-screen join screen: escape is the keyboard pressing back.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.join.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.join.is_some()) {
             self.escape_join();
             return;
         }
         // Wipeout Pure's campaign list, same rule.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.pure_chain.is_some()) {
+        if matches!(self.stack.top(), Stage::Menu(stage) if stage.pure_chain.is_some()) {
             self.handle_pure_chain(oag_ui_screens::pure_chain::Event::Back);
             return;
         }
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             // **A modal prompt takes escape first, and takes it whole.**
             // `Menu::back` is called here out of band with the tick loop -
             // see its own doc - so without this, escape over an open keyboard
@@ -322,7 +360,7 @@ impl Session {
         }
 
         if self.shell.is_some()
-            && let Stage::Race(stage) = &self.stage
+            && let Stage::Race(stage) = self.stack.top()
             && !self.pause_screen_applies(stage)
             && let RaceExit::CellSelection { cell, difficulty } = race_exit(
                 stage.run.campaign_cell.as_ref(),
@@ -333,13 +371,13 @@ impl Session {
             return;
         }
 
-        if matches!(self.stage, Stage::Race(_)) && self.shell.is_some() {
+        if matches!(self.stack.top(), Stage::Race(_)) && self.shell.is_some() {
             info!("leaving the race");
             // Before `open_menus`, not after: the menu voice this resumes has
             // to be sounding by the time the menus themselves draw. See
             // `Audio::pause_race_music`. A title's own pause screen is silent
             // instead (`Audio::hold_race_music`).
-            if matches!(&self.stage, Stage::Race(stage) if self.pause_screen_applies(stage)) {
+            if matches!(self.stack.top(), Stage::Race(stage) if self.pause_screen_applies(stage)) {
                 self.audio.hold_race_music();
             } else {
                 self.audio.pause_race_music();
@@ -372,13 +410,13 @@ impl Session {
     /// twice. A lost device calls it too (`Session::device_check`).
     pub(crate) fn capture_race_result(&mut self) {
         let unofficial = self.race_is_unofficial();
-        if let Stage::Race(stage) = &mut self.stage
+        if let Stage::Race(stage) = self.stack.top_mut()
             && !unofficial
         {
             crate::app::race_stage::ghost::save(&mut stage.race, &stage.result_key);
         }
         let campaign_title = self.campaign_title();
-        if let Stage::Race(stage) = &mut self.stage
+        if let Stage::Race(stage) = self.stack.top_mut()
             && !unofficial
             && !stage.result_saved
             // Not a split screen's: see the finish site in `Session::frame`.

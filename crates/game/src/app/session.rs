@@ -17,7 +17,7 @@ use oag_raceplay::{self as race, catalogue, pilots};
 use oag_ui::menu;
 
 use crate::app::gpu::Gpu;
-use crate::app::{race_stage::RaceStage, stage::Stage};
+use crate::app::stage::Stage;
 
 mod apply;
 mod benchmark;
@@ -114,7 +114,8 @@ pub(crate) struct Session {
     /// surface before the window can drop.
     pub(crate) idle: crate::idle::Idle,
     pub(crate) gpu: Gpu,
-    pub(crate) stage: Stage,
+    /// What is on screen, over what is paused under it (ADR-0099, `crate::app::activity_stack`).
+    pub(crate) stack: crate::app::activity_stack::ActivityStack<Stage>,
     /// One set of devices for both stages: they belong to the window rather than
     /// to what is on screen, so key state carries across the handoff and a focus
     /// loss releases everything whichever stage is running.
@@ -433,9 +434,6 @@ pub(crate) struct Session {
     pub(crate) shot_cli: Option<std::path::PathBuf>,
     /// A screenshot's viewer is loading: a failure then is told to the player, not listed.
     pub(crate) shot_pending: bool,
-    /// Whether the menus open on the REPLAYS page: set by leaving the viewer and by a recording
-    /// the rebuild refused.
-    pub(crate) return_to_replays: bool,
     /// The live race's pad rumble, or `None` (`session::rumble`).
     pub(crate) rumbler: Option<crate::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's
@@ -690,9 +688,6 @@ pub(crate) struct Session {
     /// every later one, the same way `stage.frontend.held_backdrop` is simply
     /// left behind rather than reset.
     pub(crate) held_menu_backdrop: Option<crate::app::frontend_stage::HeldFrame>,
-    /// The menus a hosted campaign map was opened from, waiting for the map to
-    /// hand the window back - see `session/hosted_map.rs`.
-    pub(crate) parked_menu: Option<Box<crate::app::menu_stage::MenuStage>>,
     /// The `--prefetch` worker, when this run started one.
     ///
     /// **On the session and not on the loading stage.** The stage is replaced
@@ -726,16 +721,6 @@ pub(crate) struct Session {
     /// `--measure-race-load`, when this run was asked to time its race
     /// loads. See `session::load_probe`.
     pub(crate) load_probe: Option<load_probe::LoadProbe>,
-    /// A race `escape` parked rather than discarded, waiting for
-    /// [`Self::resume_race`].
-    ///
-    /// **Not part of [`Self::stage`].** The menus are what is on screen while
-    /// this is `Some`, and a `Stage` can only ever be one thing - carrying the
-    /// parked race as a second field is what lets both exist at once. `None`
-    /// whenever the last race ran to completion, or was never escaped from at
-    /// all - see [`Self::open_menus`], which is the only place that fills it,
-    /// and only when the outgoing race had not finished.
-    pub(crate) suspended_race: Option<Box<RaceStage>>,
     /// The run being launched (ADR-0099): its campaign slots, a 2048 event, and once
     /// `Session::launch_race` has run, the options it launched with. The race build moves it
     /// into the `RaceStage`, so it is `None` while a race is on screen unless a relaunch is

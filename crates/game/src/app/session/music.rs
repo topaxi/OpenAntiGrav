@@ -78,7 +78,7 @@ impl Session {
     /// Called from the fixed-timestep loop: a race saves its place every
     /// `SAVE_EVERY_SECONDS` seconds of ticks.
     pub(super) fn save_race_music_periodically(&mut self) {
-        if !matches!(self.stage, Stage::Race(_)) {
+        if !matches!(self.stack.top(), Stage::Race(_)) {
             return;
         }
         if let Some(title) = self.music_title() {

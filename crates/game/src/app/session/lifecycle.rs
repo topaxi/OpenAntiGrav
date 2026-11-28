@@ -83,7 +83,7 @@ impl Session {
 
     /// A race that is neither finished nor held by the pause menu.
     pub(crate) fn race_running(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
+        matches!(self.stack.top(), Stage::Race(stage) if !stage.race.core.sim.finished())
             && !matches!(self.pause, crate::pause::State::Paused { .. })
     }
 

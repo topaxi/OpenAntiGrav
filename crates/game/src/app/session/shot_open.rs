@@ -88,7 +88,7 @@ impl Session {
     /// Whether a dropped screenshot is taken now: on the main menu with nothing over it, or in an
     /// attract demo that is not a wallpaper (which ignores every input).
     fn accepts_shot_drop(&self) -> bool {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Menu(_) => self.attract_eligible(),
             Stage::Race(stage) => stage.demo.is_some() && !self.demo_is_wallpaper(),
             _ => false,
@@ -99,7 +99,7 @@ impl Session {
     /// Returns whether the viewer's load began.
     pub(crate) fn tick_shot_cli(&mut self) -> bool {
         if self.shot_cli.is_none()
-            || !matches!(self.stage, Stage::Menu(_))
+            || !matches!(self.stack.top(), Stage::Menu(_))
             || !self.attract_eligible()
         {
             return false;

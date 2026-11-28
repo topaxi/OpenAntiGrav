@@ -10,6 +10,11 @@ use oag_raceplay as race;
 /// The launch slots of one run.
 #[derive(Default, Clone)]
 pub(crate) struct RunContext {
+    /// Which run this is: kept by every relaunch, new for every launch. The stack entries that
+    /// belong to the run name it (`crate::app::activity_stack`).
+    pub(crate) id: crate::app::activity_stack::RunId,
+    /// Where leaving the run lands, when that is not wherever its race would leave to.
+    pub(crate) origin: Option<Origin>,
     /// The race options as the launch saw them, before `Session::launch_race`'s per-launch
     /// refresh (seed, language, render profile, mods), which every relaunch runs again. `None`
     /// until the launch reaches `launch_race`, which takes them from `Session::race_options`.
@@ -50,6 +55,13 @@ pub(crate) struct RunContext {
     pub(crate) tournament: Option<race::tournament::Progress>,
 }
 
+/// The screen a run returns to when it ends (ADR-0099, decision 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Origin {
+    /// The REPLAYS page: a recording WATCHed from its list goes back to it.
+    Replays,
+}
+
 /// The race options a mod campaign event replaces: a cross-disc event's
 /// sources, an event's AI level.
 #[derive(Clone)]
@@ -71,12 +83,12 @@ impl crate::app::session::Session {
     /// The run of the race on screen, else the one being launched, else the race parked behind
     /// the menus'.
     pub(crate) fn current_run(&self) -> Option<&RunContext> {
-        match &self.stage {
+        match self.stack.top() {
             crate::app::stage::Stage::Race(stage) => Some(&stage.run),
             _ => self
                 .run
                 .as_ref()
-                .or(self.suspended_race.as_ref().map(|stage| &stage.run)),
+                .or(self.stack.paused_race().map(|stage| &stage.run)),
         }
     }
 
@@ -93,7 +105,7 @@ impl crate::app::session::Session {
     /// RACE AGAIN and NEXT RACE: the run of the race on screen becomes the run being launched,
     /// as it launched. No race on screen leaves no run.
     pub(crate) fn rerun_race_on_screen(&mut self) {
-        self.run = match &self.stage {
+        self.run = match self.stack.top() {
             crate::app::stage::Stage::Race(stage) => Some(stage.run.clone()),
             _ => None,
         };

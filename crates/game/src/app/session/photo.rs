@@ -124,19 +124,19 @@ impl super::Session {
     /// Whether PHOTO MODE is on the pause menu now: a race with one view that has not finished
     /// is on screen or parked behind the menus, and this build can write a shot.
     pub(crate) fn photo_available(&self) -> bool {
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             // A benchmark's race is never held, so it offers no PHOTO MODE.
             Stage::Race(stage) if !stage.race.core.sim.finished() && stage.benchmark.is_none() => {
-                Some(stage)
+                Some(&**stage)
             }
-            _ => self.suspended_race.as_ref(),
+            _ => self.stack.paused_race(),
         };
-        self.net.is_none() && race.is_some_and(|stage| fits(stage))
+        self.net.is_none() && race.is_some_and(fits)
     }
 
     /// The PHOTO MODE row: back to the parked race, with the mode open on it.
     pub(crate) fn open_photo_from_menu(&mut self) {
-        if !self.photo_available() || self.suspended_race.is_none() {
+        if !self.photo_available() || self.stack.paused_race().is_none() {
             return;
         }
         self.resume_race();
@@ -152,7 +152,7 @@ impl super::Session {
             return;
         };
         if self.photo.is_some()
-            || !matches!(&self.stage, Stage::Race(stage) if fits(stage))
+            || !matches!(self.stack.top(), Stage::Race(stage) if fits(stage))
             || active.pose_view
         {
             return;
@@ -166,7 +166,7 @@ impl super::Session {
                 open.resume_viewer = playing;
                 if keep_playing
                     && playing
-                    && let Stage::Race(stage) = &mut self.stage
+                    && let Stage::Race(stage) = self.stack.top_mut()
                 {
                     stage
                         .race
@@ -183,7 +183,7 @@ impl super::Session {
 
     /// SELECT on `Race End Photo` (once it takes input), with the mode open over the finish.
     pub(crate) fn open_photo_at_the_finish(&mut self) {
-        if self.net.is_none() && matches!(&self.stage, Stage::Race(stage) if fits(stage)) {
+        if self.net.is_none() && matches!(self.stack.top(), Stage::Race(stage) if fits(stage)) {
             self.begin_photo(Origin::RaceEnd);
         }
     }
@@ -196,7 +196,7 @@ impl super::Session {
             .viewer
             .as_ref()
             .map(|active| (active.viewer.at(), active.viewer.ticks()));
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         if !stage.race.photo_begin(
@@ -262,7 +262,7 @@ impl super::Session {
     pub(crate) fn tick_photo(&mut self, pointer: &Pointer, input: &InputSnapshot) {
         // The mode belongs to the race on screen: with none, it is over, and the race that was
         // moved is put back wherever it is now (parked behind the menus, say).
-        if !matches!(self.stage, Stage::Race(_)) {
+        if !matches!(self.stack.top(), Stage::Race(_)) {
             self.leave_photo();
             return;
         }
@@ -333,7 +333,7 @@ impl super::Session {
             }
             return;
         }
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         if pointer.back {
@@ -385,7 +385,7 @@ impl super::Session {
             .photo()
             .is_some_and(|p| p.lens() == oag_raceplay::photo::Lens::Free);
         self.pointer.set_mouse_pans(free);
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         let action = stage.race.photo_step(pad);
@@ -479,7 +479,7 @@ impl super::Session {
             self.gpu.output.window.current_monitor().as_ref(),
         );
         let profile = self.player_render_profile();
-        let glass_step = match &self.stage {
+        let glass_step = match self.stack.top() {
             Stage::Race(stage) if stage.scene.reflection_target_size().is_some() => {
                 Some(self.reflection_step(&profile))
             }
@@ -588,10 +588,13 @@ impl super::Session {
         let Some(mut open) = self.photo.take() else {
             return;
         };
-        let parked = self.suspended_race.as_deref_mut();
-        let stage = match &mut self.stage {
-            Stage::Race(stage) => Some(&mut **stage),
-            _ => parked,
+        let stage = if matches!(self.stack.top(), Stage::Race(_)) {
+            match self.stack.top_mut() {
+                Stage::Race(stage) => Some(&mut **stage),
+                _ => None,
+            }
+        } else {
+            self.stack.paused_race_mut()
         };
         let mut play_on = false;
         if let Some(stage) = stage {
@@ -611,7 +614,7 @@ impl super::Session {
         // A viewer carries on from the tick the mode stands at: playing if it was playing when
         // the mode opened or the PLAY row is on, silent voices rebuilt from that tick.
         if open.origin == Origin::Viewer
-            && let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage)
+            && let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), self.stack.top_mut())
         {
             active.viewer.set_playing(open.resume_viewer || play_on);
             active.muted = false;
@@ -631,7 +634,7 @@ impl super::Session {
         &self,
         f: impl FnOnce(&oag_raceplay::photo::Photo, &Words, &Open) -> R,
     ) -> Option<R> {
-        let (Some(open), Stage::Race(stage)) = (self.photo.as_ref(), &self.stage) else {
+        let (Some(open), Stage::Race(stage)) = (self.photo.as_ref(), self.stack.top()) else {
             return None;
         };
         let photo = stage.race.photo()?;
@@ -684,7 +687,7 @@ impl super::Session {
     /// The drive's reading of the picture controls while the mode is open.
     pub(crate) fn photo_fx_name(&self) -> Option<String> {
         use oag_raceplay::photo::effects::Row;
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return None;
         };
         let photo = stage.race.photo()?;
@@ -738,7 +741,7 @@ impl super::Session {
     /// The drive's name for the mode: the lens, or `none`.
     pub(crate) fn photo_lens_name(&self) -> &'static str {
         use oag_raceplay::photo::Lens;
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(stage) => match stage.race.photo().map(oag_raceplay::photo::Photo::lens) {
                 Some(Lens::Internal) => "internal",
                 Some(Lens::Close) => "close",

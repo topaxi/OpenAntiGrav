@@ -498,7 +498,7 @@ impl MenuStage {
         // input state of its own to read it from; see `Session::draw`'s call
         // site for why the closure has to be built there instead.
         bound_keys: &dyn Fn(Button) -> Vec<&'static str>,
-        // Whether `Session::suspended_race` holds a parked race, off
+        // Whether `ActivityStack::paused_race` holds a parked race, off
         // `Session::draw` - this stage holds no session state of its own to
         // read it from either. Changes two things: the disc's own looping
         // backdrop is left out (see `shown` below - the parked race's own

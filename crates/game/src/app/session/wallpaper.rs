@@ -76,7 +76,7 @@ impl Session {
     /// loading is dealt when its race is handed over (`Session::advance_race_build`).
     fn rewatch(&mut self) {
         let windows = 1 + self.screens.len();
-        if let Stage::Race(stage) = &mut self.stage
+        if let Stage::Race(stage) = self.stack.top_mut()
             && stage.demo.is_some()
         {
             stage.race.watch_in_windows(windows);

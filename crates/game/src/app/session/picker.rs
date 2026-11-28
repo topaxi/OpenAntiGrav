@@ -586,7 +586,7 @@ impl Session {
             .is_none_or(|(index, _)| index == 0)
             .then(|| self.opening_reads.take(model.kind()))
             .flatten();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return false;
         };
         let mut picker = PickerStage::new(
@@ -627,7 +627,7 @@ impl Session {
     /// One tick of an open picker: its input, and what came of it.
     pub(crate) fn tick_picker(&mut self, pointer: &oag_ui::pointer::Pointer) {
         // Help opens on the button the screen's own `Redirect` to its Help authors.
-        let authored_help = match &self.stage {
+        let authored_help = match self.stack.top() {
             Stage::Menu(stage) => stage
                 .picker
                 .as_ref()
@@ -636,7 +636,7 @@ impl Session {
             _ => Button::Triangle,
         };
         let roles = self.roles_with_help(authored_help);
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(picker) = stage.picker.as_mut() else {
@@ -688,7 +688,7 @@ impl Session {
         // JOIN GAME's Ship Select (LAN or online) comes from the join row, not from a Track
         // Select, so BACK has no Track Select to return to either.
         let joining = self.lan_picking_ship() || self.online_picking_ship();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(picker) = stage.picker.as_mut() else {

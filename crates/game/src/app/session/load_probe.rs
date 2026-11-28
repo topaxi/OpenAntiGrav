@@ -84,7 +84,7 @@ impl Session {
             return;
         };
         probe.frame_start = Instant::now();
-        if probe.measuring || !matches!(self.stage, Stage::Menu(_)) {
+        if probe.measuring || !matches!(self.stack.top(), Stage::Menu(_)) {
             return;
         }
         probe.measuring = true;
@@ -107,7 +107,7 @@ impl Session {
     /// The bottom of a frame: record it, and end the run once the race has
     /// been on screen for [`RACE_FRAMES`].
     pub(crate) fn probe_end_frame(&mut self, interval: Duration) {
-        let stage = stage_name(&self.stage);
+        let stage = stage_name(self.stack.top());
         let Some(probe) = self.load_probe.as_mut() else {
             return;
         };

@@ -15,7 +15,8 @@ use oag_ui_screens::marquee;
 use crate::app::frontend_stage::HeldFrame;
 use crate::app::hints;
 use crate::app::menu_stage::{Backdrop, MenuStage, menu_playhead};
-use crate::app::stage::Stage;
+use crate::app::run_context::Origin;
+use crate::app::stage::{Stage, StageKind};
 use crate::app::window::monitor_names;
 
 use super::{Session, picker, queries};
@@ -141,6 +142,12 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        self.open_menus_from(None)
+    }
+
+    /// [`Self::open_menus`] for a run that ended: one whose origin is the REPLAYS page lands on
+    /// it (ADR-0099, decision 1).
+    pub(crate) fn open_menus_from(&mut self, origin: Option<Origin>) -> Result<()> {
         // Whatever opens the menus ends photo mode, so a race parked behind them is not held by it.
         self.leave_photo();
         self.stop_rumble();
@@ -273,11 +280,11 @@ impl Session {
         // rather than a live stage** - it carries no playhead, which restarts
         // deliberately (see `menu_playhead`), but the picture that playhead
         // last showed is not lost with it.
-        let frontend_held = match &self.stage {
+        let frontend_held = match self.stack.top() {
             Stage::Frontend(stage) => stage.held_backdrop.as_ref(),
             _ => None,
         };
-        let is_race = matches!(self.stage, Stage::Race(_));
+        let is_race = matches!(self.stack.top(), Stage::Race(_));
         let seed = backdrop_seed(frontend_held, is_race, self.held_menu_backdrop.as_ref());
         if let Some(held) = &seed {
             renderer.upload_frame(&self.gpu.queue, &held.picture)?;
@@ -286,7 +293,7 @@ impl Session {
         // Past the last fallible step, so a renderer that could not be built
         // leaves the front end holding its own backdrop rather than stripped of
         // one it is still drawing.
-        let carried = match &mut self.stage {
+        let carried = match self.stack.top_mut() {
             Stage::Frontend(stage) => stage.frontend.take_backdrop(),
             _ => None,
         };
@@ -295,97 +302,101 @@ impl Session {
         {
             feed.restart();
         }
-        // Replaced rather than plainly assigned, so the outgoing stage passes
-        // through a binding instead of being dropped in place: a race that had
-        // not finished is parked below rather than lost. See
-        // `Session::suspended_race`.
         // A race left for the menus (escape, quit, results) stops its motors with it.
         self.controls.silence_motors();
-        let outgoing = std::mem::replace(
-            &mut self.stage,
-            Stage::Menu(Box::new(MenuStage {
-                renderer,
-                menu: model,
-                skin,
-                text_atlas,
-                default_atlas: shell.font.clone(),
-                stats_atlas: shell
-                    .buttons_font
-                    .clone()
-                    .filter(|_| shell.menu_skin.stats_font.is_some()),
-                small_atlas: shell
-                    .title_font
-                    .clone()
-                    .filter(|_| shell.menu_skin.small_font.is_some()),
-                pens: crate::boot::fonts::pens_of(shell.menu_skin),
-                frame: if pause_view.is_some() {
-                    shell.frame.without_marks()
-                } else if pause_scrim.is_some() {
-                    shell.frame.without_footer(skin.space().size.1)
-                } else {
-                    shell.frame.clone()
-                },
-                nav_legend: super::player_name::tagged(
-                    shell.nav_legend.clone(),
-                    &self.settings.player,
-                    shell.title,
-                ),
-                ticker: shell.ticker.clone(),
-                // Free-running from zero on every open, the same choice
-                // `CampaignStage::ticker_elapsed` already makes and for the
-                // same reason: nothing measured suggests the original resets
-                // its phase on a menu open, so there is nothing to seed this
-                // from instead.
-                ticker_elapsed: 0.0,
-                pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
-                pause_view,
-                pad_cursor: true,
-                marquee: marquee::Timer::default(),
-                // Opening the menus is not a page change: the front end's own
-                // hand-off already had its moment, and starting a transition
-                // here would zoom the first page in from nothing on every boot.
-                change: None,
-                // Nothing is being typed or confirmed the instant the menus
-                // open, and a prompt carried across a rebuild would be one
-                // asking about a page that is no longer on screen.
-                prompt: None,
-                picker: None,
-                partner: None,
-                campaign: None,
-                frontend_glow: shell.title.campaign.frontend_glow.is_some(),
-                pure_chain: None,
-                join: None,
-                lan: None,
-                layout: None,
-                assign: None,
-                styled,
-                backdrop: shape.map(|shape| Backdrop {
-                    player: menu_playhead(carried, frames, shape.frame_rate),
-                    rect: shape.rect,
-                    shown: seeded,
-                    held: seed,
-                }),
-            })),
-        );
         // **Finished is excluded deliberately.** A player leaving the results
         // table is not pausing - there is nothing there to resume back into -
         // so that race is discarded exactly as it always was. Only a race still
-        // running when `escape` reached here is worth keeping.
+        // running when `escape` reached here is worth keeping: the menus are
+        // pushed over it, and every other stage is replaced.
         // A LAN race is the server's and cannot be parked: leaving it leaves the game.
         // Nor is a benchmark's: leaving it ends the run, whether or not its race had
         // finished (`docs/tools/in-game-benchmark.md`).
-        let was_lan = self.net.is_some();
+        let pauses = matches!(self.stack.top(), Stage::Race(stage)
+            if !stage.race.core.sim.finished()
+                && self.net.is_none()
+                && !stage.watching
+                && stage.demo.is_none()
+                && stage.benchmark.is_none());
+        // Anything over menus already on the stack (a hosted campaign map) ends, and those
+        // menus are the ones replaced.
+        if !pauses {
+            drop(self.stack.unwind_to(StageKind::Menu));
+        }
+        let run = self
+            .stack
+            .top_run()
+            .filter(|_| pauses || matches!(self.stack.top(), Stage::Menu(_)));
+        let menus = Stage::Menu(Box::new(MenuStage {
+            renderer,
+            menu: model,
+            skin,
+            text_atlas,
+            default_atlas: shell.font.clone(),
+            stats_atlas: shell
+                .buttons_font
+                .clone()
+                .filter(|_| shell.menu_skin.stats_font.is_some()),
+            small_atlas: shell
+                .title_font
+                .clone()
+                .filter(|_| shell.menu_skin.small_font.is_some()),
+            pens: crate::boot::fonts::pens_of(shell.menu_skin),
+            frame: if pause_view.is_some() {
+                shell.frame.without_marks()
+            } else if pause_scrim.is_some() {
+                shell.frame.without_footer(skin.space().size.1)
+            } else {
+                shell.frame.clone()
+            },
+            nav_legend: super::player_name::tagged(
+                shell.nav_legend.clone(),
+                &self.settings.player,
+                shell.title,
+            ),
+            ticker: shell.ticker.clone(),
+            // Free-running from zero on every open, the same choice
+            // `CampaignStage::ticker_elapsed` already makes and for the
+            // same reason: nothing measured suggests the original resets
+            // its phase on a menu open, so there is nothing to seed this
+            // from instead.
+            ticker_elapsed: 0.0,
+            pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
+            pause_view,
+            pad_cursor: true,
+            marquee: marquee::Timer::default(),
+            // Opening the menus is not a page change: the front end's own
+            // hand-off already had its moment, and starting a transition
+            // here would zoom the first page in from nothing on every boot.
+            change: None,
+            // Nothing is being typed or confirmed the instant the menus
+            // open, and a prompt carried across a rebuild would be one
+            // asking about a page that is no longer on screen.
+            prompt: None,
+            picker: None,
+            partner: None,
+            campaign: None,
+            frontend_glow: shell.title.campaign.frontend_glow.is_some(),
+            pure_chain: None,
+            join: None,
+            lan: None,
+            layout: None,
+            assign: None,
+            styled,
+            backdrop: shape.map(|shape| Backdrop {
+                player: menu_playhead(carried, frames, shape.frame_rate),
+                rect: shape.rect,
+                shown: seeded,
+                held: seed,
+            }),
+        }));
+        if pauses {
+            self.stack.push(menus, run);
+        } else {
+            drop(self.stack.replace(menus, run));
+        }
         self.net = None;
         self.lan = None;
-        if let Stage::Race(stage) = outgoing
-            && !stage.race.core.sim.finished()
-            && !was_lan
-            && !stage.watching
-            && stage.demo.is_none()
-            && stage.benchmark.is_none()
-        {
-            self.suspended_race = Some(stage);
-        }
         self.gpu
             .output
             .window
@@ -393,8 +404,8 @@ impl Session {
                 self.settings.language.as_deref(),
             )));
         // A recording left, or one the rebuild refused, lands on the list it came from.
-        if std::mem::take(&mut self.return_to_replays)
-            && let Stage::Menu(stage) = &mut self.stage
+        if origin == Some(Origin::Replays)
+            && let Stage::Menu(stage) = self.stack.top_mut()
         {
             stage.menu.push(crate::replays::page::PAGE);
         }
@@ -505,7 +516,7 @@ impl Session {
             .iter()
             .map(|(track, name)| menu::Choice::labelled(&track.id, name))
             .collect();
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.supply(menu::ValueSource::Tracks, &tracks);
         }
     }
@@ -524,7 +535,7 @@ impl Session {
             &shell.model_gate,
         );
         queries::settle(&mut self.settings.race.variant, &choices);
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
         }
     }
@@ -627,7 +638,7 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenCampaignEditor) => self.open_campaign_editor(),
             // A row of the campaign picker: the row's id names the mod campaign.
             menu::MenuEvent::Fired(menu::Action::OpenCustomCampaign) => {
-                let key = match &self.stage {
+                let key = match self.stack.top() {
                     Stage::Menu(stage) => stage
                         .menu
                         .page()
@@ -650,7 +661,7 @@ impl Session {
             // shows that page. Only when nothing is parked does this still
             // mean the desktop is behind the root page, exactly as before.
             menu::MenuEvent::Closed => {
-                if self.suspended_race.is_some() {
+                if self.stack.paused_race().is_some() {
                     // The pause screen's music pick plays on a resume, not on PHOTO MODE, which
                     // leaves the race frozen (`docs/ui/pause-menu.md`, "Pulse").
                     self.take_pause_music_pick();
@@ -1265,7 +1276,7 @@ impl Session {
         // only thing in effect is the level the running scene was built with.
         //
         // [ADR-0041]: ../../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md
-        if let Stage::Race(stage) = &self.stage {
+        if let Stage::Race(stage) = self.stack.top() {
             let in_use = [menu::Value::Text(stage.scene.msaa().to_string())];
             if !model.in_effect("graphics.msaa", &in_use) {
                 warn!("nothing in the menus defers graphics.msaa");

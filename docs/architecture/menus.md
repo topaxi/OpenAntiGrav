@@ -1159,8 +1159,8 @@ Two things this cost that are worth knowing before touching it again:
   did not matter while the first press exited.
 
 **Leaving a race parks it, unless the race is over.** `Session::open_menus`
-keeps the outgoing `Stage::Race` in `Session::suspended_race` instead of
-letting it drop, and backing all the way out of the menus reaches
+pushes the menus over the outgoing `Stage::Race` on the activity stack
+(`Session::stack`, ADR-0099) instead of letting it drop, and backing all the way out of the menus reaches
 `Session::resume_race` in place of quitting - the fourth row in the table
 above. A finished race is the one exception: there is a results table behind
 it rather than a track, nothing to resume into, so that one is still
@@ -2283,7 +2283,7 @@ separate from the disc's own table (see "Localised labels" above), and this
 build ships one today for English and French only. Picking German changes
 nothing there at a fresh boot either, so there is nothing a live reload could
 show that a restart would not also fail to. A race already parked behind
-`Escape` (`Session::suspended_race`) keeps the `hud::Assets` it loaded when it
+`Escape` (paused under the menus on `Session::stack`) keeps the `hud::Assets` it loaded when it
 started; only a fresh `LAUNCH RACE` picks up the new language, through
 `race::Options::language` below.
 

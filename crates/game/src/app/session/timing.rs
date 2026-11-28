@@ -535,7 +535,8 @@ impl Session {
         // no `hd_bloom` field at all, because whether the chain exists is a
         // per-*circuit* decision baked into `race::Scene::new`, not a player
         // setting. See `race::Scene::has_hd_bloom`.
-        let has_hd_bloom = matches!(&self.stage, Stage::Race(stage) if stage.scene.has_hd_bloom());
+        let has_hd_bloom =
+            matches!(self.stack.top(), Stage::Race(stage) if stage.scene.has_hd_bloom());
         // Every further window's own rings, by the frame they name: [`Self::feed_windows`] pairs
         // them with window 1's below.
         for screen in &mut self.screens {
@@ -654,7 +655,7 @@ impl Session {
         let Some(frame) = frame_seconds else {
             return;
         };
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return;
         };
         if stage.scene.reflection_target_size().is_none()
@@ -921,12 +922,13 @@ impl Session {
         if self.screens.is_empty() {
             return;
         }
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             Stage::Race(stage) => Some(&stage.race),
-            _ => self.suspended_race.as_ref().map(|stage| &stage.race),
+            _ => self.stack.paused_race().map(|stage| &stage.race),
         };
         let windowed = race.is_some_and(|race| race.windowed());
-        let has_hd_bloom = matches!(&self.stage, Stage::Race(stage) if stage.scene.has_hd_bloom());
+        let has_hd_bloom =
+            matches!(self.stack.top(), Stage::Race(stage) if stage.scene.has_hd_bloom());
         let temporal = render_profile.reconstruction.is_temporal() && self.gpu.temporal;
         let screens = &self.screens;
         let fed = complete_frames(&mut self.window_ahead, |frame| {
@@ -973,9 +975,9 @@ impl Session {
     /// whose views are not timed (its scene pass has no one pair to bracket), so the scale holds
     /// at the ceiling, **chosen, not measured**, as a split screen holds it.
     pub(crate) fn drs_runs(&self) -> bool {
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             Stage::Race(stage) => Some(&stage.race),
-            _ => self.suspended_race.as_ref().map(|stage| &stage.race),
+            _ => self.stack.paused_race().map(|stage| &stage.race),
         };
         match race {
             Some(race) if race.windowed() => {

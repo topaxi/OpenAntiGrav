@@ -85,7 +85,7 @@ impl Session {
         {
             put_on_event(&mut open, &name, &self.records);
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.pure_chain = Some(open);
         }
     }
@@ -114,7 +114,7 @@ impl Session {
     /// left.
     pub(crate) fn reopen_pure_chain(&mut self, name: &str) {
         self.open_campaign();
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(open) = stage.pure_chain.as_mut()
         {
             put_on_event(open, name, &self.records);
@@ -124,7 +124,7 @@ impl Session {
     /// One tick of the open screen: pad and pointer, and what came of either.
     pub(crate) fn tick_pure_chain(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let roles = self.roles();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.pure_chain.as_mut() else {
@@ -145,7 +145,7 @@ impl Session {
     /// What one event of the open screen does. The pad path and the pointer path
     /// both end here, so a locked row refuses both alike.
     pub(crate) fn handle_pure_chain(&mut self, event: Event) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(open) = stage.pure_chain.as_mut() else {

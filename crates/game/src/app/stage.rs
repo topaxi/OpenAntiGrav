@@ -41,6 +41,29 @@ pub(crate) enum Stage {
     Race(Box<RaceStage>),
 }
 
+/// Which [`Stage`] variant an activity is, for [`crate::app::activity_stack::ActivityStack::unwind_to`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StageKind {
+    Launcher,
+    Loading,
+    Frontend,
+    Menu,
+    Race,
+}
+
+impl crate::app::activity_stack::Activity for Stage {
+    type Kind = StageKind;
+    fn kind(&self) -> StageKind {
+        match self {
+            Self::Launcher(_) => StageKind::Launcher,
+            Self::Loading(_) => StageKind::Loading,
+            Self::Frontend(_) => StageKind::Frontend,
+            Self::Menu(_) => StageKind::Menu,
+            Self::Race(_) => StageKind::Race,
+        }
+    }
+}
+
 impl Stage {
     /// The disc chooser, which is the one stage with no source behind it.
     ///
@@ -920,5 +943,6 @@ pub(crate) fn frontend_renderer(
     Ok(renderer)
 }
 
+mod held;
 #[cfg(test)]
 mod tests;

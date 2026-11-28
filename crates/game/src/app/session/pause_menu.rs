@@ -38,7 +38,7 @@ impl Session {
 
     /// The race the pause screen is for: the live one, or the one parked behind the menus.
     fn pausing_race(&self) -> Option<&RaceStage> {
-        let race = match &self.stage {
+        let race = match self.stack.top() {
             // A demo is not paused into: leaving it is the main menu. Nor is a recording being
             // watched: the viewer's exit lands on REPLAYS and nothing is parked to resume or quit.
             // Nor is a benchmark: leaving it ends the run, and the menus opened over it are the
@@ -51,7 +51,7 @@ impl Session {
             {
                 Some(&**stage)
             }
-            _ => self.suspended_race.as_deref(),
+            _ => self.stack.paused_race(),
         };
         race.filter(|stage| self.pause_screen_applies(stage))
     }
@@ -155,7 +155,7 @@ impl Session {
     /// The song the pause screen's music list was left on when the race resumes: the race music
     /// starts it from its beginning (`docs/ui/pause-menu.md`, "Pulse").
     pub(crate) fn take_pause_music_pick(&mut self) {
-        let pick = match &self.stage {
+        let pick = match self.stack.top() {
             Stage::Menu(stage) => stage
                 .menu
                 .music_list()
@@ -175,14 +175,14 @@ impl Session {
     /// an event in the recording, so a replay or ghost lap flies the laws it was recorded under.
     pub(crate) fn apply_pause_setting(&mut self, setting: &str) {
         let on_pause_page = matches!(
-            &self.stage,
+            self.stack.top(),
             Stage::Menu(stage) if stage.menu.page().id == oag_ui::menu::PAUSE_PAGE
         );
         if !on_pause_page {
             return;
         }
         if setting == "display.ghost_ship_visible" {
-            if let (Some(shell), Some(parked)) = (&self.shell, self.suspended_race.as_mut()) {
+            if let (Some(shell), Some(parked)) = (&self.shell, self.stack.paused_race_mut()) {
                 parked
                     .race
                     .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
@@ -193,7 +193,7 @@ impl Session {
             return;
         }
         let level = self.settings.controls.pilot_assist;
-        let Some(parked) = self.suspended_race.as_mut() else {
+        let Some(parked) = self.stack.paused_race_mut() else {
             return;
         };
         if parked.race.core.sim.pilot_assist_level() == level {
@@ -207,7 +207,7 @@ impl Session {
     /// RESTART RACE: the parked race again, on the options it ran with, the way the end of a
     /// race restarts it (`MenuOption::RaceAgain`).
     pub(crate) fn restart_parked_race(&mut self) {
-        let Some(stage) = self.suspended_race.as_ref() else {
+        let Some(stage) = self.stack.paused_race() else {
             return;
         };
         self.run = Some(stage.run.clone());
@@ -218,7 +218,7 @@ impl Session {
     /// QUIT RACE: the parked race is dropped. A campaign race lands on its cell, any other on
     /// the front end's main page (`Session::quit_campaign_race`).
     pub(crate) fn quit_parked_race(&mut self) {
-        let Some(parked) = self.suspended_race.take() else {
+        let Some(parked) = self.stack.take_paused_race() else {
             return;
         };
         let exit = super::escape::race_exit(

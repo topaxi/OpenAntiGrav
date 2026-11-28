@@ -53,7 +53,7 @@ impl super::Session {
                 inset: 1.0,
             });
         }
-        if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+        if self.viewer.is_some() && matches!(self.stack.top(), Stage::Race(_)) {
             return Some(OnScreen {
                 hints: Cow::Owned(self.viewer_hints(overlay.size)),
                 space: overlay,
@@ -61,7 +61,7 @@ impl super::Session {
                 inset: 1.0,
             });
         }
-        let (hints, space, inset) = match &self.stage {
+        let (hints, space, inset) = match self.stack.top() {
             Stage::Frontend(stage) => (
                 Cow::Borrowed(stage.renderer.hints()),
                 stage.frontend.space(),

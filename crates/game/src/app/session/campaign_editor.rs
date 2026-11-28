@@ -128,7 +128,7 @@ impl Session {
             start: buttons.take(Button::Start),
             select: buttons.take(Button::Select),
         };
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(campaign) = stage.campaign.as_mut() else {
@@ -304,7 +304,7 @@ impl Session {
     /// Back: closes the field panel, else leaves the editor for the picker. What is
     /// placed and not saved is dropped.
     pub(crate) fn editor_back(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(campaign) = stage.campaign.as_mut() else {
@@ -335,7 +335,7 @@ impl Session {
         let job = self.rebuild_job();
         let empty = self.word("OAG_EDITOR_NEEDS_EVENT", "PLACE AN EVENT FIRST");
         let failed = self.word("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN");
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(screen) = stage.campaign.as_mut().and_then(|c| c.editor.as_mut()) else {
@@ -368,7 +368,7 @@ impl Session {
     /// A save that finished: the editor closes on the picker, which lists the campaign.
     fn poll_editor_save(&mut self) {
         let failed = self.word("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN");
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(screen) = stage.campaign.as_mut().and_then(|c| c.editor.as_mut()) else {
@@ -386,7 +386,7 @@ impl Session {
                 self.apply_rebuilt(built, None);
                 // Opened from the campaign row's Square there was no picker to return to;
                 // the first saved campaign has made one.
-                if let Stage::Menu(stage) = &mut self.stage
+                if let Stage::Menu(stage) = self.stack.top_mut()
                     && stage.menu.page().id != oag_ui::menu::CAMPAIGN_PICKER_PAGE
                 {
                     stage.menu.push(oag_ui::menu::CAMPAIGN_PICKER_PAGE);
@@ -411,7 +411,7 @@ impl Session {
             accept: self.word("OAG_KEYBOARD_ACCEPT", "OK"),
             hint: self.keyboard_hint(),
         };
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(screen) = stage.campaign.as_ref().and_then(|c| c.editor.as_ref()) else {
@@ -423,7 +423,7 @@ impl Session {
 
     /// The name keyboard was accepted: an empty answer keeps the name.
     pub(crate) fn campaign_named(&mut self, text: &str) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         if let Some(screen) = stage.campaign.as_mut().and_then(|c| c.editor.as_mut())
@@ -443,7 +443,7 @@ impl Session {
             accept: self.word("OAG_KEYBOARD_ACCEPT", "OK"),
             hint: self.keyboard_hint(),
         };
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(screen) = stage.campaign.as_ref().and_then(|c| c.editor.as_ref()) else {
@@ -460,7 +460,7 @@ impl Session {
 
     /// The seed keyboard was accepted: an empty answer keeps the seed.
     pub(crate) fn campaign_seeded(&mut self, text: &str) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         if let Some(screen) = stage.campaign.as_mut().and_then(|c| c.editor.as_mut())

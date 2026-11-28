@@ -6,7 +6,9 @@ who owns it. It maps our own code, so it carries no confidence scores. Every
 `file:line` is pinned to commit `e30b48161`; lines drift, function names do not.
 
 [ADR-0099](adr/0099-a-run-context-and-an-activity-stack-own-navigation.md)
-proposes the structure that would replace what this page describes.
+is the structure this page now describes: migration steps 1 to 3 have landed
+(the run context, the tournament on the run, the activity stack). Line numbers
+in the sections the stack rewrote are dropped; function names hold.
 
 Related pages, not repeated here: the boot sequence ([front-end boot](frontend-boot.md)),
 the race load and its hand-off ([load-to-race transition](race-load-transition.md)),
@@ -19,11 +21,13 @@ page is what is built.
 
 What is on screen is decided in three places, not one.
 
-1. **`Stage`** (`crates/game/src/app/stage.rs:31`), one field `Session::stage`.
-   Five variants: `Launcher` (the disc chooser), `Loading` (two jobs: the boot's
+1. **The activity stack** (`crates/game/src/app/activity_stack.rs`), one field
+   `Session::stack` of `Stage` entries (`crates/game/src/app/stage.rs`). Five
+   variants: `Launcher` (the disc chooser), `Loading` (two jobs: the boot's
    movie wait and a race load), `Frontend` (the boot reel and language picker, and
-   2048's hosted campaign map), `Menu` and `Race`. Whatever is not the current
-   variant is dropped unless something parks it.
+   2048's hosted campaign map), `Menu` and `Race`. The top entry is on screen;
+   every entry under it is alive and paused. Each entry names the run it belongs
+   to (`RunId`, kept on `RunContext::id`).
 2. **Screens inside `Stage::Menu`.** `MenuStage` (`crates/game/src/app/menu_stage.rs`)
    holds the menu tree plus one `Option` per full-screen flow drawn over it:
    `picker` and `partner` (Track and Team Selection), `campaign` (Grid and Cell
@@ -40,35 +44,37 @@ What is on screen is decided in three places, not one.
 
 ## Where the switch happens
 
-`rg` finds about 420 mentions of a `Stage` variant in `crates/game`, almost all
-of them `match`es and `matches!` tests. **Eleven sites write `Session::stage`.**
-Every other transition is a call into one of them.
+Four exits write the stack and nothing else does (`ActivityStack::push`, `pop`,
+`replace`, `unwind_to`); each hands back what it removed, so the session
+decides where a race scene is released. `rg "self\.stack\.(push|pop|replace|unwind_to|replace_all|take_paused_race)\(" crates/game/src`
+lists every write. `replace_all` (a pop of every entry, then a replace of the
+bottom) and `take_paused_race` (pop the pause menu, then let it replace the race
+under it) are built from those exits in `crates/game/src/app/stage/held.rs`.
 
-| Site | From | To | What it does with the outgoing stage |
+| Site | Exit | From -> to | What happens to the outgoing entry |
 | --- | --- | --- | --- |
-| `app/handler.rs:294` | nothing | `Launcher` | first stage when several discs were found |
-| `app/handler.rs:329` | nothing | `Race` | `--race`: straight onto a track, no menus ever built |
-| `app/handler.rs:400` | nothing | `Loading` (boot) | every other windowed boot |
-| `session/load.rs:93` (`finish_launcher`) | `Launcher` | `Loading` (boot) | dropped |
-| `session/load.rs:398` (`finish_loading`) | `Loading` (boot) | `Frontend` | dropped; the boot shell moves into `Session::shell` |
-| `session/menus.rs:304` (`open_menus`) | any | `Menu` | `mem::replace`; an unfinished race is parked in `suspended_race` (`menus.rs:387`), anything else dropped |
-| `session/load.rs:739` (`start_race_loading`) | any | `Loading` (race) | **plain assignment: dropped**, whatever it was |
-| `session/load.rs:1187` (`finish_race_loading`) | `Loading` (race) | `Race` | dropped once the built race is taken |
-| `session/escape.rs:93` (`resume_race`) | `Menu` | `Race` | the menu is dropped; the race comes back out of `suspended_race` |
-| `session/hosted_map.rs:68` (`open_hosted_map`) | `Menu` | `Frontend` (hosted map) | the menu is parked in `parked_menu` |
-| `session/hosted_map.rs:97` (`poll_hosted_map`) | `Frontend` (hosted map) | `Menu` | the menu comes back out of `parked_menu` |
+| `App` build (`app/handler.rs`) | the first entry | nothing -> `Launcher`, `Race` (`--race`) or `Loading` (boot) | none |
+| `finish_launcher` (`session/load.rs`) | replace | `Launcher` -> `Loading` (boot) | dropped |
+| `finish_loading` (`session/load.rs`) | replace | `Loading` (boot) -> `Frontend` | dropped; the boot shell moves into `Session::shell` |
+| `open_menus` (`session/menus.rs`) | push over an unfinished race (pause), else unwind to menus and replace | any -> `Menu` | an unfinished, unnetworked, unwatched race that is not a demo or benchmark stays under the menus; anything else is dropped |
+| `start_race_loading` (`session/load.rs`) | `replace_all` | any -> `Loading` (race) | every entry dropped; `launch_race` and `start_watching` first drop a paused race off the frame thread (`drop_paused_race`) |
+| `finish_race_loading` (`session/load.rs`) | replace | `Loading` (race) -> `Race` | dropped once the built race is taken |
+| `resume_race` (`session/escape.rs`) | pop | `Menu` -> the paused `Race` | the menu is dropped; `resumed()` gives the race its music, rumble and title back |
+| `open_hosted_map` (`session/hosted_map.rs`) | push | `Menu` -> `Frontend` (hosted map) | stays under the map |
+| `poll_hosted_map` (`session/hosted_map.rs`) | pop | `Frontend` (hosted map) -> `Menu` | the map is dropped |
+| `quit_parked_race`, `quit_campaign_race` | `take_paused_race` | `Menu` over `Race` -> `Menu` | the paused race is dropped |
 
-So the engine has two parked slots and one depth each: `suspended_race` (a race
-behind the menus) and `parked_menu` (the menus behind 2048's map). Nothing can
-be parked behind a race, and nothing can be parked two deep.
+A pop drops the popped entry's run when no entry left names it: a race's run
+goes with its race (`RaceStage::run`), and the pending `Session::run` is ended
+(`Session::pop_activity`). The entry underneath is told it is resumed
+(`Session::resumed`); **a finished race popped back to keeps `result_saved`**
+(`activity_stack::rearms_on_resume`), so its result is not recorded twice.
 
 Reproduce the counts:
 
 ```sh
 rg -c "Stage::(Launcher|Loading|Frontend|Menu|Race)\b" crates/game | awk -F: '{s+=$2} END {print s}'
-rg -n "self\.stage = " crates/game/src
-rg -nU "mem::replace\(\s*&mut self\.stage" crates/game/src
-rg -n "Stage::(launcher|race|loading)\(" crates/game/src/app/handler.rs
+rg -n "self\.stack\.(push|pop|replace|unwind_to|replace_all|take_paused_race)\(" crates/game/src
 ```
 
 ## Transitions by flow
@@ -90,8 +96,8 @@ next screen can still read; "dropped" is what is gone. File paths are under
 | From -> to | Trigger | Chain | Carried | Dropped |
 | --- | --- | --- | --- | --- |
 | Menu -> Menu | any row, page or screen | `handle_menu`, `handle_picker`, `handle_campaign`, ... | everything: the stage is not replaced | nothing; a screen is an `Option` on `MenuStage` set to `None` |
-| Menu -> Frontend (map) | 2048 campaign tile | `handle_campaign` -> `open_hosted_map` (`hosted_map.rs:23`) | the menu, in `parked_menu` | nothing |
-| Frontend (map) -> Menu | map left or event launched | `poll_hosted_map` (`hosted_map.rs:80`) -> `follow_launch` | the parked menu; an event name in `pending_event`, its card in `pending_card` | the map |
+| Menu -> Frontend (map) | 2048 campaign tile | `handle_campaign` -> `open_hosted_map` | the menu, under the map on the stack | nothing |
+| Frontend (map) -> Menu | map left or event launched | `poll_hosted_map` (a pop) -> `follow_launch` | the menu under the map; an event name in `pending_event`, its card in `pending_card` | the map |
 
 ### Race start
 
@@ -108,11 +114,11 @@ directly.
 | benchmark | `launch_benchmark` (`benchmark.rs:244`) | moves the player's `run` and autopilot fields into `benchmark.saved`, launches a run of its own; `race_options` untouched |
 | LAN / online | `launch_lan_race` (`lan.rs:735`), `advance_online` | `net` |
 | launch keys | `launch_keyed` | ends the pending run, `race_options` |
-| WATCH, WATCH REPLAY, a shot | `watch_path` or `begin_shot` (`shot_open.rs:186`) -> `start_watching` (`replays.rs:427`) | `watching`; drops `suspended_race`, clears the run's `pending_event` and `pending_card` |
+| WATCH, WATCH REPLAY, a shot | `watch_path` or `begin_shot` (`shot_open.rs`) -> `start_watching` (`replays.rs`) | `watching`; `watch_path` ends the pending run and starts the watch's own, whose `origin` is the REPLAYS page; drops a paused race, clears the run's `pending_event` and `pending_card` |
 
-`launch_race` and `start_watching` both **drop `suspended_race`** before they
-load (`load.rs:485`, `replays.rs:432`): a race paused behind the menus does not
-survive a new launch or a replay watch.
+`launch_race` and `start_watching` both **drop a paused race** before they
+load (`drop_paused_race`): a race paused behind the menus does not survive a new
+launch or a replay watch.
 
 While the race builds, `advance_race_build` (`load.rs:781`) decides what kind of
 race it is by which `Session` slot is `Some`, in this order: `net` (a network
@@ -126,17 +132,17 @@ race, not the session, owns the run.
 
 | From -> to | Trigger | Chain | Carried | Dropped |
 | --- | --- | --- | --- | --- |
-| Race -> Menu (pause) | pause on a title with a pause screen | `escape` -> `open_menus` | the race, in `suspended_race` (unfinished, not networked, not watched, not a demo or benchmark) | nothing |
-| Menu (pause) -> Race | RESUME, or the pause page closed | `handle_menu` -> `resume_race` (`escape.rs:64`) | the parked race | the pause menu |
+| Race -> Menu (pause) | pause on a title with a pause screen | `escape` -> `open_menus` (a push) | the race, under the menus (unfinished, not networked, not watched, not a demo or benchmark) | nothing |
+| Menu (pause) -> Race | RESUME, or the pause page closed | `handle_menu` -> `resume_race` (a pop) | the paused race | the pause menu |
 | Menu (pause) -> Loading | RESTART | `restart_parked_race` (`pause_menu.rs:209`) -> `finish_launch` | `campaign_*` re-armed from the parked race | the parked race |
-| Race -> Menu (quit) | QUIT on the pause menu, or escape on a title with no pause screen | `quit_parked_race` (`pause_menu.rs:230`) -> `quit_campaign_race` (`escape.rs:155`) or `leave_finished_race`; `escape` -> `quit_campaign_race` for a campaign race, else `open_menus` | a campaign race reopens its Cell Selection; a plain escape parks an unfinished race in `suspended_race` | the race and `tournament` on the quit paths (both reach `leave_finished_race`) |
+| Race -> Menu (quit) | QUIT on the pause menu, or escape on a title with no pause screen | `quit_parked_race` -> `quit_campaign_race` or `leave_finished_race`; `escape` -> `quit_campaign_race` for a campaign race, else `open_menus` | a campaign race reopens its Cell Selection; a plain escape pauses an unfinished race under the menus | the race and `tournament` on the quit paths (both reach `leave_finished_race`) |
 | Race -> Race (photo) | photo mode | `photo` set on `Session` | the race, ticking stopped | nothing |
 | Race -> Menu | network race ended early | `frame` (`frame.rs:1107`) -> `open_menus` | nothing | the race, `net`, `lan` |
 
 ### Race end
 
 The end-of-race screens live on the finished `RaceStage` (`endrace`), so they
-exist only while that race is `Session::stage`. `handle_endrace_menu_option`
+exist only while that race is on the stack. `handle_endrace_menu_option`
 (`endrace.rs:557`):
 
 | Option | Chain | Carried | Dropped |
@@ -154,12 +160,13 @@ A title with no end menu (Pure) confirms the results board in `frame`
 
 | From -> to | Trigger | Chain | Carried | Dropped |
 | --- | --- | --- | --- | --- |
-| Menu (REPLAYS) -> Loading | WATCH | `watch_selected_replay` -> `watch_path` -> `start_watching` | `return_to_replays = true` | `suspended_race` |
-| Loading -> Race (viewer) | race built | `advance_race_build` -> `open_viewer`; `viewer` set, `return_to_replays = false` | the rebuilt race | `watching` |
-| Race (viewer) -> Menu | EXIT or escape | `leave_viewer` (`replays.rs:804`): `return_to_replays = !from_shot`, `open_menus`, which pushes the REPLAYS page (`menus.rs:396`) | nothing | the viewer's race (never parked: `watching` is set on it) |
+| Menu (REPLAYS) -> Loading | WATCH | `watch_selected_replay` -> `watch_path` -> `start_watching` | a run whose `origin` is `Origin::Replays` | a paused race |
+| Loading -> Race (viewer) | race built | `advance_race_build` -> `open_viewer`; `viewer` set | the rebuilt race, which takes the watch's run | `watching` |
+| Race (viewer) -> Menu | EXIT or escape | `leave_viewer` reads the race's run `origin` (none for a shot) -> `open_menus_from`, which pushes the REPLAYS page | nothing | the viewer's race (never paused: `watching` is set on it) |
 
-`return_to_replays` is a one-bit "where to go back to": it can name the REPLAYS
-page and nothing else.
+A recording whose load fails lands on REPLAYS the same way: the failed-load arm
+ends the run and passes its `origin` on (`open_viewer`'s refusal puts the run
+back to pending first).
 
 ### Campaign and tournament
 
@@ -189,10 +196,7 @@ unless the flow saved it by hand.
 
 | Holder | Written by | Collision |
 | --- | --- | --- |
-| `stage` | the eleven sites above | a launch from any screen drops that screen; the end screens die with their race |
-| `suspended_race` | `open_menus` | dropped by `launch_race`, `start_watching`, `quit_campaign_race`: WATCH from REPLAYS over a paused race loses the race |
-| `parked_menu` | `open_hosted_map` | 2048 only; one deep |
-| `return_to_replays` | `watch_path`, `leave_viewer`, the viewer's open | a bool for one return target |
+| `stack` | the four exits, at the sites above | a launch from any screen replaces the whole stack; a paused race is dropped by `launch_race`, `start_watching`, the quit paths: WATCH from REPLAYS over a paused race loses the race; the end screens die with their race |
 | `race_options` | boot, `launch_from_settings`, campaign launch, launch keys, `restore_campaign_home` | the RACE page's options and a campaign's still share one slot; a launch snapshots it into its run (`RunContext::options`), so a relaunch, a demo and a benchmark no longer write it |
 | `run` (`RunContext`: `options`, `campaign_cell`, `campaign_custom`, `campaign_difficulty`, `campaign_ai_skill_scale`, `campaign_add_on`, `campaign_home`, `pending_event`, `pending_card`, `tournament`) | campaign launch, 2048 launch, `launch_race`'s snapshot, RACE AGAIN, NEXT RACE, RESTART, demo, benchmark; ended by a RACE-page or keyed launch and a failed load | moved into the race at build (ADR-0099 migration steps 1 and 2); RACE AGAIN, NEXT RACE and RESTART clone it back from the race; a Tournament's standings end with it |
 | `campaign_home` (on the run) | a mod campaign event | `open_menus` restores `race_options`' source, craft source and difficulty from the pending run's or the race on screen's, on every return, whatever the return is for |
@@ -226,15 +230,14 @@ last leg the row is offered. The trace below is what the guard prevents.
 2. **The leg finishes.** `record_finished_leg` folds the board into the race's
    run. The end menu is built with NEXT RACE.
 3. **WATCH REPLAY.** `watch_last_race` writes the recording, then
-   `start_watching` drops `suspended_race` and calls `start_race_loading`, whose
-   `self.stage = Stage::race_loading(...)` **drops the finished leg's
-   `RaceStage`**, and its run with it: the cell, rung, skill scale, custom
+   `start_watching` drops a paused race and calls `start_race_loading`, whose
+   `replace_all` **drops the finished leg's `RaceStage`**, and its run with it: the cell, rung, skill scale, custom
    launch, the standings, `tournament_final_rank` and the end screens with
    their cursor. NEXT RACE clones the run from `Stage::Race`, so after this
    point there is nothing to continue from.
 4. **The viewer's race builds** with no run of the tournament's.
-5. **EXIT.** `leave_viewer` sets `return_to_replays` and calls `open_menus`.
-   The viewer's race is not parked. The REPLAYS page is pushed. There is no
+5. **EXIT.** `leave_viewer` reads the watch run's REPLAYS origin and calls
+   `open_menus_from`. The viewer's race is not kept. The REPLAYS page is pushed. There is no
    path back to an end menu: it existed only on the dropped race.
 
 Since ADR-0099's migration step 2 the whole tournament (standings and leg

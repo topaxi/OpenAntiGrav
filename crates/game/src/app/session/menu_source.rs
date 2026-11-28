@@ -168,7 +168,7 @@ impl Session {
 
     /// Starts the worker on a menu frame, once per source. A no-op on every later frame.
     pub(crate) fn start_menu_source(&mut self) {
-        if !matches!(self.stage, Stage::Menu(_)) {
+        if !matches!(self.stack.top(), Stage::Menu(_)) {
             return;
         }
         let Some(key) = self.menu_source_key() else {

@@ -25,7 +25,7 @@ impl Session {
     /// restarts the game, leaves the window up as it is, or ends the run. Returns whether the
     /// device is lost.
     pub(crate) fn device_check(&mut self) -> bool {
-        if self.last_run_lost && matches!(self.stage, Stage::Menu(_)) {
+        if self.last_run_lost && matches!(self.stack.top(), Stage::Menu(_)) {
             self.last_run_lost = false;
             self.notice = Some(super::shot_open::Notice::new(
                 self.project_word(words::LAST_RUN),

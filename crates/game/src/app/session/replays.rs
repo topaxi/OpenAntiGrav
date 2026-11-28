@@ -16,6 +16,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu;
 use oag_ui::pointer::Pointer;
 
+use crate::app::run_context::{Origin, RunContext};
 use crate::app::stage::Stage;
 
 use super::{Session, Shell};
@@ -56,10 +57,7 @@ impl Session {
         {
             self.leave_photo();
         }
-        if let Stage::Race(stage) = &mut self.stage {
-            stage.write_auto_replay();
-        }
-        if let Some(stage) = self.suspended_race.as_mut() {
+        for stage in self.stack.races_mut() {
             stage.write_auto_replay();
         }
     }
@@ -78,7 +76,7 @@ impl Session {
 
     /// The file the REPLAY row is on.
     fn selected_replay(&self) -> Option<replays::Entry> {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return None;
         };
         page::selected(&stage.menu, &self.replay_list).cloned()
@@ -150,7 +148,7 @@ impl Session {
             return;
         };
         let choices = self.replay_choices(&shell);
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.supply(menu::ValueSource::Replays, &choices);
             if let Some(key) = select {
                 stage
@@ -344,7 +342,7 @@ impl Session {
     /// The end-of-race menu's WATCH REPLAY row: the race just driven is written to `auto/` now
     /// (it would be on leaving) and opened in the viewer.
     pub(crate) fn watch_last_race(&mut self) {
-        let Stage::Race(stage) = &mut self.stage else {
+        let Stage::Race(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(path) = stage.write_auto_replay() else {
@@ -369,7 +367,12 @@ impl Session {
             .map_err(|e| e.to_string())
             .and_then(|bytes| Replay::from_bytes(&bytes).map_err(|e| e.to_string()))?;
         let options = self.replay_options(&replay)?;
-        self.return_to_replays = true;
+        // A watch is a run of its own, which lands back on REPLAYS when it ends.
+        self.end_run();
+        self.run = Some(RunContext {
+            origin: Some(Origin::Replays),
+            ..RunContext::default()
+        });
         self.start_watching(
             options,
             Watching {
@@ -440,9 +443,7 @@ impl Session {
         options: oag_raceplay::Options,
         watching: Watching,
     ) -> Result<(), String> {
-        if let Some(parked) = self.suspended_race.take() {
-            crate::app::race_build::drop_off_thread(parked);
-        }
+        self.drop_paused_race();
         if let Some(run) = self.run.as_mut() {
             run.pending_event = None;
             run.pending_card = None;
@@ -452,6 +453,7 @@ impl Session {
         self.start_race_loading(options, mode, None, false)
             .map_err(|e| {
                 self.watching = None;
+                self.end_run();
                 format!("{e:#}")
             })
     }
@@ -480,7 +482,7 @@ impl Session {
 
     /// The viewer's followed craft (a grid slot) and HUD (`on`, `off`) for the drive's state line.
     pub(crate) fn replay_view_names(&self) -> (Option<String>, Option<String>) {
-        let (Some(active), Stage::Race(stage)) = (self.viewer.as_ref(), &self.stage) else {
+        let (Some(active), Stage::Race(stage)) = (self.viewer.as_ref(), self.stack.top()) else {
             return (None, None);
         };
         (
@@ -713,7 +715,8 @@ impl Session {
         if asked.camera {
             self.cycle_camera_view();
         }
-        let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage) else {
+        let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), self.stack.top_mut())
+        else {
             return;
         };
         if asked.hud {
@@ -819,11 +822,14 @@ impl Session {
             return;
         };
         info!("replays: the viewer closed");
-        self.return_to_replays = !closed.from_shot;
+        let origin = match self.stack.top() {
+            Stage::Race(stage) if !closed.from_shot => stage.run.origin,
+            _ => None,
+        };
         self.audio.pause_race_music();
         self.save_race_music();
         self.audio.stop_race_sfx();
-        if let Err(error) = self.open_menus() {
+        if let Err(error) = self.open_menus_from(origin) {
             error!("cannot return to the menus: {error:#}");
             self.quit = true;
         }

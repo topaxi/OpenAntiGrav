@@ -68,7 +68,7 @@ impl Session {
     /// The step's name in a race whose circuit draws a glass or sea target, for the overlay and
     /// the frame log; `None` otherwise.
     pub(super) fn reflection_drawn_name(&self) -> Option<&'static str> {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Race(race) if race.scene.reflection_target_size().is_some() => {
                 Some(self.reflection_step(&self.render_profile()).name())
             }
@@ -228,7 +228,7 @@ impl Session {
             // there before `finish_loading` ever swaps it in. A resize that
             // lands during that wait has to reach it in place, or the swap
             // hands over a scene sized for a framebuffer that no longer exists.
-            match &mut self.stage {
+            match self.stack.top_mut() {
                 Stage::Race(stage) => {
                     stage.scene.resize(
                         &self.gpu.device,
@@ -247,14 +247,14 @@ impl Session {
                 }
                 _ => {}
             }
-            // A parked race is not `self.stage` - see `Session::suspended_race` -
+            // A paused race is not the stack's top (`ActivityStack::paused_race`),
             // so the match above never reaches it, and the menus over it are
             // free to change window mode, size or render scale while it waits.
             // Same validation-error reasoning as the two arms above: its
             // depth attachment has to track the framebuffer too, or the resize
             // that greeted the menus leaves `resume_race`'s scene sized for a
             // framebuffer that no longer exists.
-            if let Some(stage) = self.suspended_race.as_mut() {
+            if let Some(stage) = self.stack.paused_race_mut() {
                 stage.scene.resize(
                     &self.gpu.device,
                     self.gpu.output.config.format,
@@ -325,19 +325,19 @@ impl Session {
         let scene_target = self.framebuffer.view();
         let ui_target = self.framebuffer.output();
         // Whether this frame has anything for the upscaler to carry. Read
-        // before the match, which borrows `self.stage` mutably.
+        // before the match, which borrows `self.stack` mutably.
         //
-        // **A parked race counts too.** `Session::suspended_race` renders into
+        // **A parked race counts too.** `ActivityStack::paused_race` renders into
         // `scene_target` from inside the `Stage::Menu` arm below, exactly as
         // `Stage::Race` does directly - so there is a scene for `resolve_scene`
         // to carry into the presentation target whenever one is parked, and
         // ADR-0038 ("a stage with no scene draws at presentation resolution")
         // does not apply: the menus over a parked race are a stage *with* one.
-        let has_scene = matches!(self.stage, Stage::Race(_))
-            || (matches!(self.stage, Stage::Menu(_)) && self.suspended_race.is_some());
+        let has_scene = matches!(self.stack.top(), Stage::Race(_))
+            || (matches!(self.stack.top(), Stage::Menu(_)) && self.stack.paused_race().is_some());
         // Claim a timestamp pair for the scene pass, on the frames that have
         // one. Here rather than inside the match for the same reason
-        // `pvs_culling` is read here: the match borrows `self.stage`. Paired
+        // `pvs_culling` is read here: the match borrows `self.stack`. Paired
         // with exactly one `resolve` below, which is why the claim is gated on
         // the same `has_scene` the pass itself is.
         if has_scene && let Some(timer) = self.pass_timer.as_mut() {
@@ -356,7 +356,7 @@ impl Session {
         // has one**: `race::scene::frame::Scene::hd` is `None` on Pulse,
         // Pure and any HD circuit with no `HDR and Bloom` block, and there is
         // no cheap way to ask that here, above the match that borrows
-        // `self.stage`. `stats.hd_bloom_encoded` is the answer and the
+        // `self.stack`. `stats.hd_bloom_encoded` is the answer and the
         // `abandon` below is what a `false` costs - see `SceneStats::hd_bloom_encoded`.
         if has_scene && let Some(timer) = self.hd_bloom_timer.as_mut() {
             timer.begin(self.frame_index);
@@ -374,9 +374,9 @@ impl Session {
             // and in `OTHER`.
             self.pass_costs.stalled(self.frame_index);
         }
-        // Read before the match, which borrows `self.stage` mutably.
+        // Read before the match, which borrows `self.stack` mutably.
         let pvs_culling = self.pvs_culling();
-        // Read before `self.stage` is borrowed mutably below, for the same
+        // Read before `self.stack` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
         let render_profile = self.governed_profile();
         let reflection_step = self.reflection_step(&render_profile);
@@ -394,12 +394,12 @@ impl Session {
         // was ready" number into where inside this one frame it actually goes -
         // see the timers below and in `Session::finish_race_loading`.
         let timing_first_race_frame =
-            self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
+            self.race_ready_at.is_some() && matches!(self.stack.top(), Stage::Race(_));
         let resume_art = crate::pause::art_seconds(self.pause, self.go_at, self.wall);
-        // Read before the match, which borrows `self.stage` mutably.
+        // Read before the match, which borrows `self.stack` mutably.
         let stepping = self.race_stepping();
         self.phases.mark(super::phases::Phase::Setup);
-        let (scene_stats, video_label) = match &mut self.stage {
+        let (scene_stats, video_label) = match self.stack.top_mut() {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, ui_target, rect);
                 (None, None)
@@ -429,7 +429,7 @@ impl Session {
             // the same call `Stage::Race` makes below, so the picture behind
             // the menus is the real thing rather than a stand-in for it.
             Stage::Menu(_) => {
-                let stats = self.suspended_race.as_mut().map(|parked| {
+                let stats = self.stack.paused_race_mut().map(|parked| {
                     let spectrum = self.audio.output().spectrum().levels();
                     let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
                     parked.race.set_model_detail(render_profile.model_detail);
@@ -738,7 +738,7 @@ impl Session {
             // previous one's.
             // A windowed race keeps a record per window, and a window of several seats (a
             // split) has none: `None` there, as a menu frame.
-            let temporal = match &self.stage {
+            let temporal = match self.stack.top() {
                 Stage::Race(stage) if self.gpu.temporal => stage.temporal(0),
                 _ => None,
             };
@@ -833,7 +833,7 @@ impl Session {
         self.phases.mark(super::phases::Phase::Scene);
         // The average of a finished photo mode shot goes in under the HUD (`photo_hud`).
         self.photo_encode_average(&mut encoder);
-        if let Stage::Race(stage) = &mut self.stage {
+        if let Stage::Race(stage) = self.stack.top_mut() {
             // Pure's glow lands before its HUD (`Looks::bloom_under_hud`); a no-op elsewhere.
             stage
                 .scene
@@ -887,7 +887,7 @@ impl Session {
         // A race parked behind the menus has no HUD, except under a pause screen whose title
         // keeps it (dimmed by the tint the menus draw over it); its glow still lands, before
         // the menu rows go on.
-        let pause_table = match &self.stage {
+        let pause_table = match self.stack.top() {
             // A title whose pause page is the front end's own list (Pulse) has no view, and its table
             // still says what stays under the tint.
             Stage::Menu(menu) if menu.pause_scrim.is_some() => menu
@@ -899,7 +899,8 @@ impl Session {
         };
         let hud_under_tint = pause_table.is_some_and(|table| table.hud_under_scrim);
         let song_line_held = pause_table.is_some_and(|table| !table.song_line_under_scrim);
-        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_mut()) {
+        let in_menus = matches!(self.stack.top(), Stage::Menu(_));
+        if let Some(parked) = self.stack.paused_race_mut().filter(|_| in_menus) {
             parked
                 .scene
                 .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
@@ -926,7 +927,7 @@ impl Session {
         // **The menus draw here, after the resolve, rather than in the match
         // above.** Every other stage owns the presentation target outright and
         // draws into it first; the menus cannot, because a race parked behind
-        // them (`Session::suspended_race`) rendered its own scene into
+        // them (`ActivityStack::paused_race`) rendered its own scene into
         // `scene_target` in that same match, and `resolve_scene` above has not
         // run yet at that point in the function - drawing the menu there and
         // resolving the scene here would have the resolve overwrite the rows
@@ -935,7 +936,7 @@ impl Session {
         // already carries: the parked race's resolved picture when one is
         // parked, or nothing when the presentation target was never touched
         // this frame (`has_scene` is `false`) - either way `MenuStage::render`
-        // itself decides whether to clear or load, off `suspended_race`.
+        // itself decides whether to clear or load, off `ActivityStack::paused_race`.
         // The CONTROLS page's own key-capture prompt, resolved here rather
         // than carried on `MenuStage` itself: the text names the button
         // being rebound, off `Session::awaiting_binding`, and `MenuStage`
@@ -954,7 +955,8 @@ impl Session {
             })
             // The ffmpeg download's status line takes the same slot: a modal line over frozen rows.
             .or_else(|| self.ffmpeg_status());
-        if let Stage::Menu(stage) = &mut self.stage {
+        let paused = self.stack.paused_race().is_some();
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             // What the `AXIS` row currently means, read live off the page's
             // own rows - `None` off any page but AI PILOTS. Computed here
             // rather than inside `MenuStage::render`, which holds no
@@ -1021,7 +1023,7 @@ impl Session {
                 rect,
                 self.backdrop.as_mut(),
                 &|button| self.controls.bound_keys(button),
-                self.suspended_race.is_some(),
+                paused,
                 binding_prompt.as_deref(),
                 axis_preview.as_deref(),
                 &records_table,
@@ -1113,7 +1115,7 @@ impl Session {
             .as_deref()
             .and_then(crate::net_play::NetPlay::readout);
         // The simulation mods block, only in a modded race.
-        let mods_readout = match &self.stage {
+        let mods_readout = match self.stack.top() {
             Stage::Race(stage) => crate::mod_extensions::readout(&stage.race),
             _ => None,
         };
@@ -1181,7 +1183,7 @@ impl Session {
         // Why a dropped screenshot did not open, over whichever screen it was dropped on.
         list.extend(self.notice_screen(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
-        if let Stage::Menu(stage) = &self.stage
+        if let Stage::Menu(stage) = self.stack.top()
             && let Some(art) = crate::touch_controls::art::Art::from_sheet(&self.cursor_sheet)
         {
             list.extend(crate::touch_controls::preview::for_page(
@@ -1209,7 +1211,7 @@ impl Session {
         }
         // The pad's cursor on the 2048 campaign map is the same arrow, at the
         // grid point the front end holds it, so a stick shows where Confirm lands.
-        let stick_cursor = match &self.stage {
+        let stick_cursor = match self.stack.top() {
             Stage::Frontend(stage) => stage.frontend.map_cursor().map(|at| {
                 let space = stage.frontend.space();
                 let inset = stage.renderer.inset();
@@ -1302,7 +1304,7 @@ impl Session {
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.
         // Taken rather than read, so this fires once: the first frame drawn
         // with the new scene, not every frame after it.
-        if matches!(self.stage, Stage::Race(_))
+        if matches!(self.stack.top(), Stage::Race(_))
             && let Some(ready_at) = self.race_ready_at.take()
         {
             debug!(
@@ -1318,7 +1320,7 @@ impl Session {
     /// the `--race` route has none, so a race's HUD answers instead, and a run with
     /// neither reads as the PSP's.
     pub(super) fn native_size(&self) -> (f32, f32) {
-        match (&self.shell, &self.stage) {
+        match (&self.shell, self.stack.top()) {
             (Some(shell), _) => shell.space,
             (None, Stage::Race(stage)) => stage
                 .hud
@@ -1334,7 +1336,7 @@ impl Session {
     /// them, and a race only once it is paused or over. A running race
     /// reads no pointer, and a cursor over it would say otherwise.
     fn shows_cursor(&self) -> bool {
-        match &self.stage {
+        match self.stack.top() {
             Stage::Launcher(_) | Stage::Frontend(_) | Stage::Menu(_) => true,
             Stage::Loading(_) => false,
             Stage::Race(stage) => self.paused() || stage.race.core.sim.finished(),

@@ -21,7 +21,7 @@ impl Session {
     /// Builds the menus again where the player stood when what the rows say has changed
     /// (a scan landed, a source appeared): the page's rows are made when the model is.
     pub(crate) fn poll_music_pool(&mut self) {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         let pool = self.music_discs.pool();
@@ -37,7 +37,7 @@ impl Session {
             return;
         };
         model.settle();
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu = model;
         }
     }

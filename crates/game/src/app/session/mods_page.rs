@@ -10,7 +10,7 @@
 //!
 //! Live rather than on the next launch because nothing a mod adds is held past the
 //! front end: a race reads its options when it launches, a campaign when it opens. A
-//! race parked under the menus (`Session::suspended_race`) keeps what it started with.
+//! race parked under the menus (`ActivityStack::paused_race`) keeps what it started with.
 
 use log::{error, info};
 
@@ -61,7 +61,7 @@ impl Session {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             mods::open_item(&mut stage.menu, id, &shell.mods, &shell.strings);
         }
     }
@@ -71,7 +71,7 @@ impl Session {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             mods::resupply_switch(&mut stage.menu, &shell.mods, &shell.strings);
         }
     }
@@ -80,7 +80,7 @@ impl Session {
     /// on the mod the page showed.
     pub(crate) fn follow_mod_row(&mut self) {
         self.resupply_mod_switch();
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(id) = mods::selection(&stage.menu)
         {
             stage.menu.point_item(mods::PAGE, &id);
@@ -90,7 +90,7 @@ impl Session {
     /// The SETTINGS row: walks into the settings page of the mod the MOD row is on, so BACK
     /// lands on the MODS page with the same mod.
     pub(crate) fn open_selected_mod_settings(&mut self) {
-        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
+        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), self.stack.top_mut()) else {
             return;
         };
         if let Some(page) = mods::settings_page(&stage.menu, &shell.mods) {
@@ -100,7 +100,7 @@ impl Session {
 
     /// The ENABLED row moved to `on`: [`Self::switch_mod`] for the mod the MOD row is on.
     pub(crate) fn switch_selected_mod(&mut self, on: bool) {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         if let Some(id) = mods::selection(&stage.menu) {
@@ -197,7 +197,7 @@ impl Session {
             mods::reseat(&mut model, id, &shell.mods, &shell.strings);
         }
         model.settle();
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu = model;
         }
         self.shell = Some(shell);
@@ -223,7 +223,7 @@ impl Session {
     /// that keeps the player in place goes through this, so none can forget a row that is stored
     /// nowhere.
     pub(crate) fn model_where_stood(&mut self, shell: &super::Shell) -> Option<(menu::Menu, bool)> {
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return None;
         };
         let trail = stage.menu.trail();

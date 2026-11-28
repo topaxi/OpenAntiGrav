@@ -50,7 +50,7 @@ impl Session {
             self.rejoin_gone();
             return;
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         let confirm = prompt::Confirm::opened_on_yes(prompt::ConfirmLabels {
@@ -65,7 +65,7 @@ impl Session {
         if let Some(online) = &mut self.online {
             online.step = Step::Offered;
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(Prompt::asking(Purpose::RejoinRace, confirm));
         }
     }
@@ -133,7 +133,7 @@ impl Session {
         }
         let why = self.online_say("OAG_ONLINE_REJOIN_GONE", "YOUR RACE IS OVER");
         self.open_online_prompt(super::Field::Address);
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(prompt) = stage.prompt.as_mut()
         {
             prompt.set_note(Some(why));

@@ -143,7 +143,7 @@ impl Session {
 
     /// ONLINE on the MULTIPLAYER page: starts the connect step.
     pub(crate) fn open_online(&mut self) {
-        if !matches!(self.stage, Stage::Menu(_)) || self.shell.is_none() {
+        if !matches!(self.stack.top(), Stage::Menu(_)) || self.shell.is_none() {
             return;
         }
         let saved = self.settings.online.clone();
@@ -229,7 +229,7 @@ impl Session {
             accept: self.online_say("OAG_KEYBOARD_ACCEPT", "OK"),
             hint: self.online_say(hint_id, hint),
         };
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.prompt = Some(Prompt::typing(
                 Purpose::Online(field),
                 prompt::Keyboard::with_keys(labels, &initial, limit, keys),
@@ -308,11 +308,11 @@ impl Session {
         if let Some(online) = &mut self.online {
             online.lobby = None;
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         self.open_online_prompt(Field::Address);
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && let Some(prompt) = stage.prompt.as_mut()
         {
             prompt.set_note(Some(notice));
@@ -320,7 +320,7 @@ impl Session {
     }
 
     fn show_online_screen(&mut self, screen: Join) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = Some(screen);
         }
     }
@@ -328,7 +328,7 @@ impl Session {
     /// Leaves online play altogether: the connection closes and the screen goes.
     pub(crate) fn end_online(&mut self) {
         self.online = None;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         self.resupply_race_modes();
@@ -336,7 +336,7 @@ impl Session {
 
     /// CREATE GAME: the RACE page, pushed over the ONLINE page so BACK returns there.
     pub(crate) fn open_online_create(&mut self) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         if self.online.is_none() || !stage.menu.push("race") {
@@ -428,7 +428,7 @@ impl Session {
         let Some(online) = &self.online else {
             return;
         };
-        let Stage::Menu(stage) = &self.stage else {
+        let Stage::Menu(stage) = self.stack.top() else {
             return;
         };
         let page = stage.menu.page().id.as_str();
@@ -584,7 +584,7 @@ impl Session {
         }
         // The room stands over the ONLINE page, not over the RACE page it was made on, so
         // BACK from the room lands on the page the player chose CREATE GAME from.
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             for _ in 0..4 {
                 if stage.menu.page().id == "online" {
                     break;
@@ -619,7 +619,7 @@ impl Session {
         if let Some(id) = &track_id {
             self.settings.race.track = id.clone();
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
             if !stage.menu.push("race") {
                 return;
@@ -727,7 +727,7 @@ impl Session {
             .iter()
             .fold(0, |all, press| all | press.buttons);
         let back = self.roles().back;
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let skin = &stage.skin;
@@ -762,7 +762,7 @@ impl Session {
         }
         events.extend(screen.pointer(pointer, skin));
         for event in events {
-            if !matches!(&self.stage, Stage::Menu(stage) if stage.lan.is_some()) {
+            if !matches!(self.stack.top(), Stage::Menu(stage) if stage.lan.is_some()) {
                 break;
             }
             self.handle_online(event);
@@ -906,13 +906,13 @@ impl Session {
                 // The hosting port closes with the room.
                 online.hosting = None;
                 online.step = Step::Hub;
-                if let Stage::Menu(stage) = &mut self.stage {
+                if let Stage::Menu(stage) = self.stack.top_mut() {
                     stage.lan = None;
                 }
             }
             Step::List => {
                 online.step = Step::Hub;
-                if let Stage::Menu(stage) = &mut self.stage {
+                if let Stage::Menu(stage) = self.stack.top_mut() {
                     stage.lan = None;
                 }
             }
@@ -923,7 +923,7 @@ impl Session {
                     .is_some_and(|lobby| lobby.poll().is_ok())
                 {
                     online.step = Step::Hub;
-                    if let Stage::Menu(stage) = &mut self.stage {
+                    if let Stage::Menu(stage) = self.stack.top_mut() {
                         stage.lan = None;
                     }
                 } else {
@@ -943,7 +943,7 @@ impl Session {
     }
 
     fn online_list_to_create(&mut self) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
         }
         self.open_online_create();
@@ -1136,7 +1136,7 @@ impl Session {
             return;
         };
         online.step = Step::Notice;
-        if matches!(self.stage, Stage::Menu(_)) {
+        if matches!(self.stack.top(), Stage::Menu(_)) {
             let screen = self.online_waiting_screen(text.to_uppercase());
             self.show_online_screen(screen);
         }
@@ -1308,7 +1308,7 @@ impl Session {
         }
         if let Some(net) = launch {
             self.net = Some(Box::new(net));
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = self.stack.top_mut() {
                 stage.lan = None;
             }
             if let Err(e) = self.launch_race() {
@@ -1346,7 +1346,7 @@ impl Session {
                     })
                     .collect()
             });
-        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
+        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), self.stack.top_mut()) else {
             return;
         };
         // A refused join leaves the room form on screen over the list: the form follows the step.
@@ -1420,7 +1420,7 @@ impl Session {
         if let Err(e) = self.save_settings() {
             warn!("online: cannot remember the lobby: {e:#}");
         }
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.lan = None;
             stage.menu.push("online");
         }
@@ -1428,7 +1428,7 @@ impl Session {
 
     /// Out of a room or list back to the ONLINE page, with the notice on its subtitle line.
     fn online_leave_screens_for_hub(&mut self) {
-        if let Stage::Menu(stage) = &mut self.stage
+        if let Stage::Menu(stage) = self.stack.top_mut()
             && stage.lan.is_some()
         {
             stage.lan = None;
@@ -1457,7 +1457,7 @@ impl Session {
         }
         online.step = Step::Room;
         online.pick_sent = false;
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.menu.push("multiplayer");
             stage.menu.push("online");
         }

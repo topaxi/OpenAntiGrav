@@ -54,7 +54,7 @@ impl Session {
     /// The description and stream of the frame the race on screen is about to be drawn as, or
     /// `None` when no race is on screen. `source` says how the frame was asked for.
     pub(crate) fn shot_pending(&self, source: &str) -> Option<Pending> {
-        let Stage::Race(stage) = &self.stage else {
+        let Stage::Race(stage) = self.stack.top() else {
             return None;
         };
         let shell = self.shell.as_ref()?;

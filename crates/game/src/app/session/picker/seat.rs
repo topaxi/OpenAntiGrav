@@ -155,7 +155,7 @@ impl Session {
     /// Seat `index` confirmed: keep its pick, and open the next seat's screen or
     /// launch the race.
     pub(super) fn confirm_seat(&mut self, index: usize, count: usize) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let Some(picker) = stage.picker.take() else {
@@ -197,7 +197,7 @@ impl Session {
     /// A seat on the shared page confirmed (`partner` is the second seat): hold
     /// its pick, and launch once both are held.
     pub(super) fn confirm_shared(&mut self, partner: bool) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let held = if partner {
@@ -244,7 +244,7 @@ impl Session {
             super::livery::confirmed(&mut self.settings.race, fixed);
         }
         if both {
-            if let Stage::Menu(stage) = &mut self.stage {
+            if let Stage::Menu(stage) = self.stack.top_mut() {
                 stage.picker = None;
                 stage.partner = None;
             }
@@ -257,7 +257,7 @@ impl Session {
     /// second seat directly, because the first seat's back handler would read the
     /// *first* seat's hold.
     pub(super) fn leave_shared(&mut self) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.picker = None;
             stage.partner = None;
         }
@@ -272,7 +272,7 @@ impl Session {
 
     /// Back on a seat that had confirmed on the shared page: take the confirm back.
     pub(super) fn unlock_shared(&mut self, partner: bool) {
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Stage::Menu(stage) = self.stack.top_mut() else {
             return;
         };
         let held = if partner {
@@ -294,7 +294,7 @@ impl Session {
         self.play_navs(event.nav());
         match event {
             Event::Moved | Event::VariantChanged => {
-                if let Stage::Menu(stage) = &mut self.stage
+                if let Stage::Menu(stage) = self.stack.top_mut()
                     && let Some(partner) = stage.partner.as_deref_mut()
                 {
                     partner.refresh_preview(&self.gpu);
@@ -304,7 +304,7 @@ impl Session {
             Event::Help => {}
             Event::Confirmed => self.confirm_shared(true),
             Event::Back => {
-                let locked = matches!(&self.stage, Stage::Menu(stage)
+                let locked = matches!(self.stack.top(), Stage::Menu(stage)
                     if stage.partner.as_deref().is_some_and(|p| p.model.is_locked()));
                 if locked {
                     self.unlock_shared(true);
@@ -317,7 +317,7 @@ impl Session {
 
     /// Back from a later seat: forget its pick and return to the seat before.
     pub(super) fn back_seat(&mut self, index: usize) {
-        if let Stage::Menu(stage) = &mut self.stage {
+        if let Stage::Menu(stage) = self.stack.top_mut() {
             stage.picker = None;
         }
         self.split_picks.truncate(index.saturating_sub(1));
