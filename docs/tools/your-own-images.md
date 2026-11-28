@@ -34,8 +34,8 @@ File names do not matter. The game reads the title's ID from inside the file.
 1. Dump your own UMD with your own dump tool. The result is an `.iso`.
 2. Optional: [compress it to `.chd`](#compress-an-iso-to-chd).
 
-The game looks for `.iso` and `.chd` files. Other compressed forms, such as
-`.cso`, are not found.
+Of disc image endings, these two are the ones the game looks for: see
+[what to put in the folder](../overview/installing.md#3-what-to-put-in-the-folder-per-game).
 
 **What the game accepts**
 
@@ -59,9 +59,10 @@ The PS2 release is Europe only.
 
 This is for PSP and PS2 images. It saves space and is never needed.
 
-`chdman` comes with MAME's tools (the `mame-tools` package on Arch). The game
-reads CHD files made by `chdman createdvd`, and single-track ones made by
-`chdman createcd`.
+`chdman` comes with MAME's tools (the `mame-tools` package on Arch, see
+[chdman](../reverse-engineering/toolchain.md#chdman)). The game reads
+single-track CHD files made by `chdman createdvd` or `chdman createcd`: see
+[the files in detail](../overview/installing.md#the-files-in-detail).
 
 ```sh
 chdman createdvd -i game.iso -o game.chd
@@ -103,7 +104,7 @@ and [PS3 disc encryption](../formats/ps3-disc.md).
 
 ### From the PlayStation Store
 
-This is the Europe version (`NPEA00057`, v3.00). You need the package (`.pkg`)
+This route was checked with the Europe version (`NPEA00057`, v3.00) only. You need the package (`.pkg`)
 of your own purchase and the licence file (`.rap`) that comes with it. The tool
 is RPCS3's own package installer.
 
@@ -203,7 +204,7 @@ Then put the `.vpk` in your `images` folder.
 `-0` stores the files without compression. A compressed file over 1 GiB inside a
 `.vpk` is refused. For the patch and each DLC pack, make a separate `.vpk` the
 same way and keep them all in the same folder. The game adds them by the title
-ID inside.
+ID inside. These rules are in [Vita packages](../formats/vita-package.md#vpk).
 
 In a source checkout, `scripts/make-test-vpk.sh PCSF00007` does this from
 `data/extracted/vita/` and writes into `data/test-vpk/`.
